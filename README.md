@@ -2,14 +2,14 @@
 
 ## 📝 Descrizione
 
-SmartTask è un'applicazione web progettata per facilitare la gestione personale delle attività quotidiane. Offre un'interfaccia semplice e intuitiva per creare, visualizzare, modificare ed eliminare task, con funzionalità avanzate come ordinamento per priorità, modalità chiara/scura e notifiche per le scadenze imminenti. L'app è pensata per utenti singoli che desiderano organizzare il proprio tempo in modo efficace 🚀.
+SmartTask è un'applicazione web progettata per facilitare la gestione personale delle attività quotidiane. Offre un'interfaccia semplice e intuitiva per creare, visualizzare, modificare ed eliminare task, con funzionalità avanzate come ordinamento per priorità, modalità chiara/scura e notifiche per le scadenze imminenti. L'app è pensata per utenti singoli che desiderano organizzare il proprio tempo in modo efficace.
 
 ## ✨ Funzionalità
 
-* Gestire attività personali o lavorative 💼
-* Tenere traccia di scadenze e priorità 📅
-* Aumentare la produttività con suggerimenti e notifiche 💡
-* Personalizzare l'esperienza utente tramite la Dark/Light mode 🎨
+* Gestire attività personali o lavorative
+* Tenere traccia di scadenze e priorità
+* Aumentare la produttività con suggerimenti e notifiche
+* Personalizzare l'esperienza utente tramite la Dark/Light mode
 
 ## 🔄 Flussi principali
 
