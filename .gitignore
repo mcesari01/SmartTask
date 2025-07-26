@@ -1,0 +1,16 @@
+*.pyc
+node_modules
+dist
+build
+.env
+.DS_Store
+coverage
+.vscode
+.idea
+*.log
+*.tmp
+*.bak
+*.swp
+*.cache
+*.pid
+*.db

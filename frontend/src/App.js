@@ -7,40 +7,83 @@ export default function App() {
   const [description, setDescription] = useState("");
   const [deadline, setDeadline] = useState("");
   const [priority, setPriority] = useState("Medium");
+  const [sortBy] = useState(null);
+  const [sortOrder] = useState("asc");
+  const [sortedView, setSortedView] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState(null);
+
 
   useEffect(() => {
     fetchTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchTasks = async () => {
-    const res = await axios.get("http://localhost:8000/tasks");
+    let url = "http://localhost:8000/tasks";
+    if (!sortedView) {
+      url += "?sort_by=priority&sort_order=asc";
+    }
+    const res = await axios.get(url);
     setTasks(res.data);
   };
 
+  const handleSortToggle = () => {
+    setSortedView(!sortedView);
+    fetchTasks(); // Re-fetch tasks with the new sorting state
+  };
 
   const createTask = async () => {
     if (!title || !deadline) return;
-
-    const adjustedDeadline = new Date(deadline).toISOString();
-
     await axios.post("http://localhost:8000/tasks", {
       title,
-      description: description || "",
-      deadline: adjustedDeadline,
+      description,
+      deadline,
       priority,
     });
     setTitle("");
     setDescription("");
     setDeadline("");
     setPriority("Medium");
-    fetchTasks();
+    fetchTasks(sortBy, sortOrder);
   };
 
   const deleteTask = async (id) => {
     await axios.delete(`http://localhost:8000/tasks/${id}`);
-    fetchTasks();
+    fetchTasks(sortBy, sortOrder);
   };
 
+  const isUrgent = (deadline) => {
+    const now = new Date();
+    const taskDate = new Date(deadline);
+    const diff = taskDate - now;
+    return diff > 0 && diff <= 24 * 60 * 60 * 1000; // entro 24 ore
+  };
+
+  const startEditing = (task) => {
+    setEditingTaskId(task.id);
+    setTitle(task.title);
+    setDescription(task.description || "");
+    setDeadline(new Date(task.deadline).toISOString().slice(0, 16)); // per input datetime-local
+    setPriority(task.priority);
+  };
+
+  const updateTask = async () => {
+    if (!editingTaskId) return;
+
+    await axios.put(`http://localhost:8000/tasks/${editingTaskId}`, {
+      title,
+      description,
+      deadline,
+      priority,
+    });
+
+    setEditingTaskId(null);
+    setTitle("");
+    setDescription("");
+    setDeadline("");
+    setPriority("Medium");
+    fetchTasks();
+  };
 
   return (
       <div className="max-w-xl mx-auto mt-10 p-4">
@@ -76,40 +119,48 @@ export default function App() {
             <option value="Low">Bassa</option>
           </select>
           <button
-              onClick={createTask}
-              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+              onClick={editingTaskId ? updateTask : createTask}
+              className={`${editingTaskId ? "bg-orange-500 hover:bg-orange-600" : "bg-blue-500 hover:bg-blue-600"} text-white px-4 py-2 rounded`}
           >
-            Aggiungi Task
+            {editingTaskId ? "💾 Salva Modifiche" : "Aggiungi Task"}
+          </button>
+          <button
+              onClick={handleSortToggle}
+              className="mb-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+          >
+            {sortedView ? "🔄 Vista Normale" : "📊 Ordina per Priorità/Scadenza"}
           </button>
         </div>
-
         <ul className="space-y-2">
           {tasks.map((task) => (
               <li
                   key={task.id}
                   className={`border p-3 rounded shadow flex justify-between items-center ${
-                      task.priority === "High"
-                          ? "bg-red-100"
-                          : task.priority === "Medium"
-                              ? "bg-yellow-100"
-                              : "bg-green-100"
+                      isUrgent(task.deadline)
+                          ? 'bg-red-200 border-red-500'
+                          : task.priority === "High"
+                              ? "bg-red-100"
+                              : task.priority === "Medium"
+                                  ? "bg-yellow-100"
+                                  : "bg-green-100"
                   }`}
               >
                 <div>
-                  <p className="font-semibold">
-                    {task.title} (
-                    {task.priority === "High"
-                        ? "Alta"
-                        : task.priority === "Medium"
-                            ? "Media"
-                            : "Bassa"}
-                    )
-                  </p>
+                  <p className="font-semibold">{task.title} ({task.priority})</p>
                   <p className="text-sm text-gray-500">{task.description}</p>
                   <p className="text-sm text-gray-500">
                     Scadenza: {new Date(task.deadline).toLocaleString()}
                   </p>
+                  {isUrgent(task.deadline) && (
+                      <p className="text-sm font-bold text-red-700">🔔 In scadenza!</p>
+                  )}
                 </div>
+                <button
+                    onClick={() => startEditing(task)}
+                    className="bg-yellow-400 text-white px-3 py-1 rounded hover:bg-yellow-500 mr-2"
+                >
+                  ✏️ Modifica
+                </button>
                 <button
                     onClick={() => deleteTask(task.id)}
                     className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
