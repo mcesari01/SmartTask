@@ -57,7 +57,7 @@ def get_tasks(
 
 @app.post("/tasks", response_model=TaskRead)
 def create_task(task: TaskCreate, db: Session = Depends(get_db)):
-    db_task = TaskModel(**task.dict())
+    db_task = TaskModel(**task.model_dump())
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
@@ -75,7 +75,7 @@ def update_task(task_id: int, updated_task: TaskCreate, db: Session = Depends(ge
     task = db.query(TaskModel).filter(TaskModel.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    for key, value in updated_task.dict().items():
+    for key, value in updated_task.model_dump().items():
         setattr(task, key, value)
     db.commit()
     db.refresh(task)

@@ -1,3 +1,5 @@
+import sys
+import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -7,6 +9,8 @@ from models import Task as TaskModel
 from schemas import schemas
 from main import app, get_db
 import datetime
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"  
 
@@ -39,7 +43,7 @@ def example_task():
     return {
         "title": "Test Task",
         "description": "Task di esempio",
-        "deadline": (datetime.datetime.utcnow() + datetime.timedelta(days=3)).isoformat(),
+        "deadline": (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3)).isoformat(),
         "priority": "High"
     }
 
