@@ -19,12 +19,17 @@ export default function App() {
   }, []);
 
   const fetchTasks = async () => {
-    let url = "http://localhost:8000/tasks";
-    if (!sortedView) {
-      url += "?sort_by=priority&sort_order=asc";
+    try {
+      let url = "http://localhost:8000/tasks";
+      if (!sortedView) {
+        url += "?sort_by=priority&sort_order=asc";
+      }
+      const res = await axios.get(url);
+      setTasks(res.data || []);
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+      setTasks([]);
     }
-    const res = await axios.get(url);
-    setTasks(res.data);
   };
 
   const handleSortToggle = () => {
@@ -34,22 +39,30 @@ export default function App() {
 
   const createTask = async () => {
     if (!title || !deadline) return;
-    await axios.post("http://localhost:8000/tasks", {
-      title,
-      description,
-      deadline,
-      priority,
-    });
-    setTitle("");
-    setDescription("");
-    setDeadline("");
-    setPriority("Medium");
-    fetchTasks(sortBy, sortOrder);
+    try {
+      await axios.post("http://localhost:8000/tasks", {
+        title,
+        description,
+        deadline,
+        priority,
+      });
+      setTitle("");
+      setDescription("");
+      setDeadline("");
+      setPriority("Medium");
+      fetchTasks(sortBy, sortOrder);
+    } catch (error) {
+      console.error('Error creating task:', error);
+    }
   };
 
   const deleteTask = async (id) => {
-    await axios.delete(`http://localhost:8000/tasks/${id}`);
-    fetchTasks(sortBy, sortOrder);
+    try {
+      await axios.delete(`http://localhost:8000/tasks/${id}`);
+      fetchTasks(sortBy, sortOrder);
+    } catch (error) {
+      console.error('Error deleting task:', error);
+    }
   };
 
   const isUrgent = (deadline) => {
@@ -70,19 +83,23 @@ export default function App() {
   const updateTask = async () => {
     if (!editingTaskId) return;
 
-    await axios.put(`http://localhost:8000/tasks/${editingTaskId}`, {
-      title,
-      description,
-      deadline,
-      priority,
-    });
+    try {
+      await axios.put(`http://localhost:8000/tasks/${editingTaskId}`, {
+        title,
+        description,
+        deadline,
+        priority,
+      });
 
-    setEditingTaskId(null);
-    setTitle("");
-    setDescription("");
-    setDeadline("");
-    setPriority("Medium");
-    fetchTasks();
+      setEditingTaskId(null);
+      setTitle("");
+      setDescription("");
+      setDeadline("");
+      setPriority("Medium");
+      fetchTasks();
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
   };
 
   return (
@@ -108,7 +125,8 @@ export default function App() {
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
               className="border p-2 rounded"
-          />
+              data-testid="deadline-input"
+            />
           <select
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
