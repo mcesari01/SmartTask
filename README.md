@@ -18,6 +18,44 @@ SmartTask è un'applicazione web progettata per facilitare la gestione personale
 3.  **Eliminazione di un task**: L'utente clicca "Elimina" accanto a un task e questo viene rimosso dopo conferma.
 4.  **Ordinamento dei task**: L'utente può alternare tra visualizzazione normale e ordinata per priorità/scadenza.
 
+## ⚙️ Setup dell'ambiente di sviluppo
+### 1. Clona la repository
+
+```bash
+git clone https://github.com/mcesari01/SmartTask.git
+cd SmartTask/backend
+```
+
+### 2. Create un ambiente virtuale per il backend
+
+```bash
+python -m venv venv
+source venv/bin/activate     # macOS/Linux
+venv\Scripts\activate        # Windows
+``` 
+
+### 3. Installazione dipendenze
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Avvio del server FastAPI
+```bash
+uvicorn main:app --reload
+```
+
+### 5. Installazione dipendenze
+```bash
+cd frontend
+npm install
+```
+
+### 6. Avvio frontend
+```bash
+npm run dev
+```
+
 ## 👥 Team
 
 * Cesari Matteo \[Mat. 1073570]
