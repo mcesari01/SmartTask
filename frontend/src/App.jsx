@@ -12,24 +12,62 @@ export default function App() {
   const [sortedView, setSortedView] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
 
+  const hasChanges = () => {
+    if (!editingTaskId) return false;
+    const original = tasks.find((t) => t.id === editingTaskId);
+    return original && (
+      original.title !== title ||
+      original.description !== description ||
+      new Date(original.deadline).toISOString().slice(0, 16) !== deadline ||
+      original.priority !== priority
+    );
+  };
 
   useEffect(() => {
     fetchTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    Notification.requestPermission();
+  }, []);
+
+  useEffect(() => {
+    const notifiedIds = new Set();
+
+    const interval = setInterval(() => {
+      const now = new Date();
+      tasks.forEach((task) => {
+        const deadline = new Date(task.deadline);
+        const diff = deadline - now;
+
+        if (
+          diff > 0 &&
+          diff <= 60 * 60 * 1000 && // entro 1 ora
+          !notifiedIds.has(task.id)
+        ) {
+          // Mostra notifica
+          new Notification("⏰ Task in scadenza", {
+            body: `${task.title} scade alle ${deadline.toLocaleTimeString()}`,
+          });
+          console.log("Notifica inviata per:", task.title);
+
+          // Registra che abbiamo già notificato questo task
+          notifiedIds.add(task.id);
+        }
+      });
+    }, 5000); // ogni 30 secondi
+
+    return () => clearInterval(interval);
+  }, [tasks]);
+
   const fetchTasks = async () => {
-    try {
-      let url = "http://localhost:8000/tasks";
-      if (!sortedView) {
-        url += "?sort_by=priority&sort_order=asc";
-      }
-      const res = await axios.get(url);
-      setTasks(res.data || []);
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
-      setTasks([]);
+    let url = "http://localhost:8000/tasks";
+    if (!sortedView) {
+      url += "?sort_by=priority&sort_order=asc";
     }
+    const res = await axios.get(url);
+    setTasks(res.data);
   };
 
   const handleSortToggle = () => {
@@ -39,30 +77,32 @@ export default function App() {
 
   const createTask = async () => {
     if (!title || !deadline) return;
-    try {
-      await axios.post("http://localhost:8000/tasks", {
-        title,
-        description,
-        deadline,
-        priority,
-      });
+    await axios.post("http://localhost:8000/tasks", {
+      title,
+      description,
+      deadline,
+      priority,
+    });
+    setTitle("");
+    setDescription("");
+    setDeadline("");
+    setPriority("Medium");
+    fetchTasks(sortBy, sortOrder);
+  };
+
+  const deleteTask = async (id) => {
+    const confirmed = window.confirm("Sei sicuro di voler eliminare questo task?");
+    if (!confirmed) return;
+
+    await axios.delete(`http://localhost:8000/tasks/${id}`);
+    if (editingTaskId === id) {
+      setEditingTaskId(null);
       setTitle("");
       setDescription("");
       setDeadline("");
       setPriority("Medium");
-      fetchTasks(sortBy, sortOrder);
-    } catch (error) {
-      console.error('Error creating task:', error);
     }
-  };
-
-  const deleteTask = async (id) => {
-    try {
-      await axios.delete(`http://localhost:8000/tasks/${id}`);
-      fetchTasks(sortBy, sortOrder);
-    } catch (error) {
-      console.error('Error deleting task:', error);
-    }
+    fetchTasks(sortBy, sortOrder);
   };
 
   const isUrgent = (deadline) => {
@@ -83,23 +123,19 @@ export default function App() {
   const updateTask = async () => {
     if (!editingTaskId) return;
 
-    try {
-      await axios.put(`http://localhost:8000/tasks/${editingTaskId}`, {
-        title,
-        description,
-        deadline,
-        priority,
-      });
+    await axios.put(`http://localhost:8000/tasks/${editingTaskId}`, {
+      title,
+      description,
+      deadline,
+      priority,
+    });
 
-      setEditingTaskId(null);
-      setTitle("");
-      setDescription("");
-      setDeadline("");
-      setPriority("Medium");
-      fetchTasks();
-    } catch (error) {
-      console.error('Error updating task:', error);
-    }
+    setEditingTaskId(null);
+    setTitle("");
+    setDescription("");
+    setDeadline("");
+    setPriority("Medium");
+    fetchTasks();
   };
 
   return (
@@ -125,8 +161,7 @@ export default function App() {
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
               className="border p-2 rounded"
-              data-testid="deadline-input"
-            />
+          />
           <select
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
@@ -138,10 +173,27 @@ export default function App() {
           </select>
           <button
               onClick={editingTaskId ? updateTask : createTask}
-              className={`${editingTaskId ? "bg-orange-500 hover:bg-orange-600" : "bg-blue-500 hover:bg-blue-600"} text-white px-4 py-2 rounded`}
+              disabled={!title || !deadline || (editingTaskId && !hasChanges())}
+              className={`${editingTaskId ? "bg-orange-500 hover:bg-orange-600" : "bg-blue-500 hover:bg-blue-600"} text-white px-4 py-2 rounded ${
+                (!title || !deadline || (editingTaskId && !hasChanges())) && "opacity-50 cursor-not-allowed"
+              }`}
           >
             {editingTaskId ? "💾 Salva Modifiche" : "Aggiungi Task"}
           </button>
+          {editingTaskId && (
+            <button
+              onClick={() => {
+                setEditingTaskId(null);
+                setTitle("");
+                setDescription("");
+                setDeadline("");
+                setPriority("Medium");
+              }}
+              className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500"
+            >
+              ❌ Annulla Modifica
+            </button>
+          )}
           <button
               onClick={handleSortToggle}
               className="mb-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
