@@ -157,11 +157,12 @@ export default function App() {
               className="border p-2 rounded"
           />
           <input
+              data-testid="deadline-input"
               type="datetime-local"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
               className="border p-2 rounded"
-          />
+            />
           <select
               value={priority}
               onChange={(e) => setPriority(e.target.value)}

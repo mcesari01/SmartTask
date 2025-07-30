@@ -126,8 +126,11 @@ describe("SmartTask App", () => {
     });
   });
 
-  test("deletes a task", async () => {
-    axios.get.mockResolvedValueOnce({
+test("deletes a task", async () => {
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+  axios.get
+    .mockResolvedValueOnce({
       data: [
         {
           id: 2,
@@ -137,21 +140,25 @@ describe("SmartTask App", () => {
           priority: "Low",
         },
       ],
-    });
+    })
+    .mockResolvedValueOnce({ data: [] }); // dopo delete
 
-    axios.get.mockResolvedValue({ data: [] });
-    axios.delete.mockResolvedValue({ data: { detail: "Task deleted" } });
+  axios.delete.mockResolvedValue({ data: { detail: "Task deleted" } });
 
-    render(<App />);
-    await screen.findByText(/Da eliminare/i);
+  render(<App />);
+  await screen.findByText(/Da eliminare/i);
 
-    const deleteButton = screen.getByRole("button", { name: /Elimina/i });
-    fireEvent.click(deleteButton);
+  const deleteButton = await screen.findByRole("button", { name: /Elimina/i });
+  fireEvent.click(deleteButton);
 
-    await waitFor(() => {
-      expect(axios.delete).toHaveBeenCalledWith(
-        "http://localhost:8000/tasks/2"
-      );
-    });
+  await waitFor(() => {
+    expect(axios.delete).toHaveBeenCalledWith(
+      "http://localhost:8000/tasks/2"
+    );
   });
+
+  await waitFor(() => {
+    expect(screen.queryByText(/Da eliminare/i)).not.toBeInTheDocument();
+  });
+});
 });
