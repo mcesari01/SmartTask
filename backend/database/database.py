@@ -1,3 +1,4 @@
+"""Database configuration and utilities."""
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -10,7 +11,7 @@ print(f"Database path: {DB_PATH}")
 print(f"Database exists: {os.path.exists(DB_PATH)}")
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, 
+    SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False},
     # Aggiungi queste opzioni per migliorare la persistenza
     pool_pre_ping=True,

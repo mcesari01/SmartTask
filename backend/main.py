@@ -1,13 +1,17 @@
-from fastapi import FastAPI, HTTPException, Depends, status
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from sqlalchemy import asc, desc, case
+"""Main application file for the SmartTask backend."""
+
 from typing import List, Optional
-from models import Task as TaskModel, User
-from schemas.schemas import TaskCreate, TaskRead, UserCreate, UserRead, Token
-from database.database import SessionLocal, engine, Base
-from auth import get_current_user, verify_password, get_password_hash, create_access_token, get_db
+
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import case, desc
+from sqlalchemy.orm import Session
+
+from auth import create_access_token, get_current_user, get_db, get_password_hash, verify_password
+from database.database import Base, engine
+from models import Task as TaskModel, User
+from schemas.schemas import TaskCreate, TaskRead, Token, UserCreate, UserRead
 
 app = FastAPI()
 
@@ -26,6 +30,7 @@ Base.metadata.create_all(bind=engine)
 
 @app.post("/register", response_model=UserRead)
 def register(user: UserCreate, db: Session = Depends(get_db)):
+    """Registers a new user."""
     db_user = db.query(User).filter(User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -38,6 +43,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 @app.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    """Authenticates a user and returns an access token."""
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
@@ -55,6 +61,7 @@ def get_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Retrieves tasks for the current user, with optional sorting."""
     query = db.query(TaskModel).filter(TaskModel.user_id == current_user.id)
     if sort_by == "priority":
         priority_order = case(
@@ -63,8 +70,11 @@ def get_tasks(
             (TaskModel.priority == "Low", 3),
             else_=4
         )
-        query = query.order_by(priority_order if sort_order == "asc" else desc(priority_order))
-        query = query.order_by(TaskModel.deadline if sort_order == "asc" else desc(TaskModel.deadline))
+        # Apply compound sorting: first by priority, then by deadline as secondary sort
+        if sort_order == "asc":
+            query = query.order_by(priority_order, TaskModel.deadline)
+        else:
+            query = query.order_by(desc(priority_order), desc(TaskModel.deadline))
     else:
         query = query.order_by(TaskModel.id)
     return query.all()
@@ -75,6 +85,7 @@ def create_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Creates a new task for the current user."""
     db_task = TaskModel(**task.model_dump(), user_id=current_user.id)
     db.add(db_task)
     db.commit()
@@ -87,7 +98,10 @@ def get_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    task = db.query(TaskModel).filter(TaskModel.id == task_id, TaskModel.user_id == current_user.id).first()
+    """Retrieves a specific task by ID for the current user."""
+    task = db.query(TaskModel).filter(
+        TaskModel.id == task_id, TaskModel.user_id == current_user.id
+    ).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found or not authorized")
     return task
@@ -99,7 +113,10 @@ def update_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    task = db.query(TaskModel).filter(TaskModel.id == task_id, TaskModel.user_id == current_user.id).first()
+    """Updates an existing task by ID for the current user."""
+    task = db.query(TaskModel).filter(
+        TaskModel.id == task_id, TaskModel.user_id == current_user.id
+    ).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found or not authorized")
     for key, value in updated_task.model_dump().items():
@@ -114,7 +131,10 @@ def delete_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    task = db.query(TaskModel).filter(TaskModel.id == task_id, TaskModel.user_id == current_user.id).first()
+    """Deletes a task by ID for the current user."""
+    task = db.query(TaskModel).filter(
+        TaskModel.id == task_id, TaskModel.user_id == current_user.id
+    ).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found or not authorized")
     db.delete(task)

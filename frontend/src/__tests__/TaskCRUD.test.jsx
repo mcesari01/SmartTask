@@ -26,7 +26,9 @@ test('fetches and displays tasks', async () => {
   axios.get.mockResolvedValueOnce({ data: [{ id: 1, title: 'Task di prova', description: 'Desc', deadline: new Date().toISOString(), priority: 'High' }] });
   render(<App />);
   expect(await screen.findByText(/Task di prova/i)).toBeInTheDocument();
-  expect(screen.getByText(/Desc/i)).toBeInTheDocument();
+  // Find the task description in the task list (not the form label)
+  const taskItems = screen.getByRole('list');
+  expect(taskItems).toContainElement(screen.getByText('Desc'));
 });
 
 test('creates a new task', async () => {
