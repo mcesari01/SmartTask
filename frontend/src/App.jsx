@@ -13,6 +13,7 @@ export default function App() {
   const [priority, setPriority] = useState('Medium');
   const [sortedView, setSortedView] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const navigate = useNavigate();
 
   const resetForm = () => {
@@ -67,6 +68,11 @@ export default function App() {
   useEffect(() => {
     fetchTasks();
   }, [sortedView]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   const fetchTasks = async () => {
     try {
@@ -163,67 +169,80 @@ export default function App() {
   };
 
   return (
-    <div className="max-w-xl mx-auto mt-10 p-4">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">📋 SmartTask Dashboard</h1>
-        <button onClick={handleLogout} className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
-          Esci
-        </button>
-      </div>
-      <div className="flex flex-col gap-2 mb-6">
-        <input type="text" placeholder="Titolo task" value={title} onChange={(e) => setTitle(e.target.value)} className="border p-2 rounded" />
-        <input type="text" placeholder="Descrizione" value={description} onChange={(e) => setDescription(e.target.value)} className="border p-2 rounded" />
-        <input data-testid="deadline-input" type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="border p-2 rounded" />
-        <select value={priority} onChange={(e) => setPriority(e.target.value)} className="border p-2 rounded">
-          <option value="High">Alta</option>
-          <option value="Medium">Media</option>
-          <option value="Low">Bassa</option>
-        </select>
-        <button
-          onClick={editingTaskId ? updateTask : createTask}
-          disabled={!title || !deadline || (editingTaskId && !hasChanges())}
-          className={`${editingTaskId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-500 hover:bg-blue-600'} text-white px-4 py-2 rounded ${
-            (!title || !deadline || (editingTaskId && !hasChanges())) && 'opacity-50 cursor-not-allowed'
-          }`}
-        >
-          {editingTaskId ? '💾 Salva Modifiche' : 'Aggiungi Task'}
-        </button>
-        {editingTaskId && (
-          <button onClick={resetForm} className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500">
-            ❌ Annulla Modifica
+    <div className="page-container">
+      <div className="topbar">
+        <div className="app-title">📋 SmartTask Dashboard</div>
+        <div className="topbar-actions">
+          <button className="btn btn-ghost" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle dark mode">
+            {theme === 'light' ? '🌙 Dark mode' : '☀️ Light mode'}
           </button>
-        )}
-        <button onClick={() => setSortedView((prev) => !prev)} className="mb-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
-          {sortedView ? '🔄 Vista Normale' : '📊 Ordina per Priorità/Scadenza'}
-        </button>
+          <button onClick={handleLogout} className="btn btn-danger"><svg width="12" height="12" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h7v2H5v14h7v2zm11-4l-1.375-1.45l2.55-2.55H9v-2h8.175l-2.55-2.55L16 7l5 5z"/></svg> Esci</button>
+        </div>
       </div>
-      <ul className="space-y-2">
-        {tasks.map((task) => (
-          <li
-            key={task.id}
-            className={`border p-3 rounded shadow flex justify-between items-center ${
-              isUrgent(task.deadline)
-                ? 'bg-red-200 border-red-500'
-                : task.priority === 'High'
-                ? 'bg-red-100'
-                : task.priority === 'Medium'
-                ? 'bg-yellow-100'
-                : 'bg-green-100'
-            }`}
-          >
-            <div>
-              <p className="font-semibold">{task.title} ({task.priority})</p>
-              <p className="text-sm text-gray-500">{task.description}</p>
-              <p className="text-sm text-gray-500">Scadenza: {new Date(task.deadline).toLocaleString()}</p>
-              {isUrgent(task.deadline) && <p className="text-sm font-bold text-red-700">🔔 In scadenza!</p>}
-            </div>
-            <div>
-              <button onClick={() => startEditing(task)} className="bg-yellow-400 text-white px-3 py-1 rounded hover:bg-yellow-500 mr-2">✏️ Modifica</button>
-              <button onClick={() => deleteTask(task.id)} className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">Elimina</button>
-            </div>
-          </li>
-        ))}
-      </ul>
+
+      <div className="grid two">
+        <section className="card section">
+          <div className="section-title">{editingTaskId ? 'Modifica Task' : 'Crea nuovo Task'}</div>
+          <div className="field">
+            <label htmlFor="title">Titolo</label>
+            <input id="title" type="text" placeholder="Titolo task" value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div className="field" style={{ marginTop: 12 }}>
+            <label htmlFor="desc">Descrizione</label>
+            <input id="desc" type="text" placeholder="Descrizione" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div className="field" style={{ marginTop: 12 }}>
+            <label htmlFor="deadline">Scadenza</label>
+            <input data-testid="deadline-input" id="deadline" type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+          </div>
+          <div className="field" style={{ marginTop: 12 }}>
+            <label htmlFor="priority">Priorità</label>
+            <select className="form-select" id="priority" value={priority} onChange={(e) => setPriority(e.target.value)}>
+              <option value="High">Alta</option>
+              <option value="Medium">Media</option>
+              <option value="Low">Bassa</option>
+            </select>
+          </div>
+          <div className="form-actions" style={{ marginTop: 16 }}>
+            <button
+              onClick={editingTaskId ? updateTask : createTask}
+              disabled={!title || !deadline || (editingTaskId && !hasChanges())}
+              className="btn"
+            >
+              {editingTaskId ? '💾 Salva modifiche' : 'Aggiungi task'}
+            </button>
+            {editingTaskId && (
+              <button onClick={resetForm} className="btn btn-ghost">Annulla</button>
+            )}
+            <button onClick={() => setSortedView((prev) => !prev)} className="btn btn-ghost">
+              {sortedView ? 'Ordina per priorità/scadenza' : 'Vista normale'}
+            </button>
+          </div>
+        </section>
+
+        <section className="card section">
+          <div className="section-title">Task</div>
+          <ul className="task-list">
+            {tasks.map((task) => (
+              <li key={task.id} className="task-item">
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <strong>{task.title}</strong>
+                    <span className={`badge ${task.priority.toLowerCase()}`}>{task.priority}</span>
+                    {isUrgent(task.deadline) && <span className="badge" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}>In scadenza</span>}
+                  </div>
+                  {task.description && <div className="task-meta" style={{ marginTop: 6 }}>{task.description}</div>}
+                  <div className="task-meta" style={{ marginTop: 4 }}>Scadenza: {new Date(task.deadline).toLocaleString()}</div>
+                </div>
+                <div className="actions">
+                  <button onClick={() => startEditing(task)} className="btn btn-ghost">✏️ Modifica</button>
+                  <button onClick={() => deleteTask(task.id)} className="btn btn-danger">Elimina</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
       <ToastContainer />
     </div>
   );

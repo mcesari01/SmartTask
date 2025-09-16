@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
@@ -7,6 +7,12 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
+
+    const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+    }, [theme]);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -34,38 +40,33 @@ export default function Login() {
     };
 
     return (
-        <div className="max-w-md mx-auto mt-10 p-4">
-            <h1 className="text-2xl font-bold mb-4">Login</h1>
-            {error && <p className="text-red-500">{error}</p>}
-            <form onSubmit={handleLogin} className="flex flex-col gap-2">
-                <input
-                    type="email"
-                    placeholder="Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="border p-2 rounded"
-                />
-                <input
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="border p-2 rounded"
-                />
-                <button
-                    type="submit"
-                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-                    disabled={!email || !password}
-                >
-                    Accedi
-                </button>
-            </form>
-            <p className="mt-4">
-                Non hai un account?{' '}
-                <a href="/register" className="text-blue-500">
-                    Registrati
-                </a>
-            </p>
+        <div className="page-container centered-page">
+            <div className="topbar" style={{ marginTop: 0, marginBottom: 24 }}>
+                <div className="app-title">SmartTask</div>
+                <div className="topbar-actions">
+                    <button className="btn-ghost" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle dark mode">
+                        {theme === 'light' ? '🌙' : '☀️'}
+                    </button>
+                </div>
+            </div>
+            <div className="card auth-card">
+                <div className="section-title">Accedi</div>
+                {error && <p style={{ color: 'var(--color-danger)', marginBottom: 12 }}>{error}</p>}
+                <form onSubmit={handleLogin} className="form" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div className="field">
+                        <label htmlFor="email">Email</label>
+                        <input id="email" type="email" placeholder="email@esempio.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    </div>
+                    <div className="field">
+                        <label htmlFor="password">Password</label>
+                        <input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+                    </div>
+                    <div className="form-actions" style={{ marginTop: 8 }}>
+                        <button type="submit" className="btn" disabled={!email || !password}>Accedi</button>
+                        <a href="/register" className="link" style={{ alignSelf: 'center' }}>Registrati</a>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 }
