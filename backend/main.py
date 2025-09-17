@@ -8,10 +8,18 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import case, desc
 from sqlalchemy.orm import Session
 
-from auth import create_access_token, get_current_user, get_db, get_password_hash, verify_password
+from auth import (
+    create_access_token,
+    get_current_user,
+    get_db,
+    get_password_hash,
+    verify_password,
+    verify_google_id_token_and_get_email,
+)
 from database.database import Base, engine
 from models import Task as TaskModel, User
 from schemas.schemas import TaskCreate, TaskRead, Token, UserCreate, UserRead
+from pydantic import BaseModel
 
 app = FastAPI()
 
@@ -25,7 +33,7 @@ app.add_middleware(
 )
 
 # Crea tabelle
-#Base.metadata.drop_all(bind=engine)
+# Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
 
 @app.post("/register", response_model=UserRead)
@@ -52,6 +60,24 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = create_access_token(data={"sub": user.email})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+class GoogleAuthPayload(BaseModel):
+    credential: str
+
+
+@app.post("/auth/google", response_model=Token)
+def google_auth(payload: GoogleAuthPayload, db: Session = Depends(get_db)):
+    """Login/Register via Google ID token. Creates user if not exists, then issues JWT."""
+    email = verify_google_id_token_and_get_email(payload.credential)
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        user = User(email=email, hashed_password="")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    access_token = create_access_token(data={"sub": email})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/tasks", response_model=List[TaskRead])

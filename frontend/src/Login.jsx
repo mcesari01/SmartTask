@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
@@ -9,6 +9,7 @@ export default function Login() {
     const navigate = useNavigate();
 
     const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+    const googleDivRef = useRef(null);
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('theme', theme);
@@ -39,6 +40,71 @@ export default function Login() {
         }
     };
 
+    // Google Sign-In
+    useEffect(() => {
+        const clientId = '39094537919-fpqfsor5dc2mrgbacotk4tlt1mc8j19u.apps.googleusercontent.com';
+
+        function handleCredentialResponse(response) {
+            const { credential } = response || {};
+            if (!credential) return;
+            axios.post('http://localhost:8000/auth/google', { credential })
+                .then((res) => {
+                    localStorage.setItem('token', res.data.access_token);
+                    navigate('/');
+                })
+                .catch(() => {
+                    setError('Accesso con Google non riuscito.');
+                });
+        }
+
+        const scriptId = 'google-identity-services';
+        if (!document.getElementById(scriptId)) {
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.async = true;
+            script.defer = true;
+            script.id = scriptId;
+            script.onload = () => {
+                // eslint-disable-next-line no-undef
+                window.google?.accounts.id.initialize({
+                    client_id: clientId,
+                    callback: handleCredentialResponse,
+                    ux_mode: 'popup',
+                });
+                if (googleDivRef.current) {
+                    // eslint-disable-next-line no-undef
+                    window.google?.accounts.id.renderButton(googleDivRef.current, {
+                        theme: theme === 'light' ? 'outline' : 'filled_black',
+                        size: 'large',
+                        shape: 'pill',
+                        text: 'signin_with',
+                        width: 320,
+                    });
+                }
+            };
+            document.body.appendChild(script);
+        } else {
+            // eslint-disable-next-line no-undef
+            window.google?.accounts.id.initialize({
+                client_id: clientId,
+                callback: handleCredentialResponse,
+                ux_mode: 'popup',
+            });
+            if (googleDivRef.current) {
+                // eslint-disable-next-line no-undef
+                window.google?.accounts.id.renderButton(googleDivRef.current, {
+                    theme: theme === 'light' ? 'outline' : 'filled_black',
+                    size: 'large',
+                    shape: 'pill',
+                    text: 'signin_with',
+                    width: 320,
+                });
+            }
+        }
+        // Re-render button on theme change for contrast
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [theme]);
+
     return (
         <div className="page-container centered-page">
             <div className="topbar" style={{ marginTop: 0, marginBottom: 24 }}>
@@ -61,11 +127,19 @@ export default function Login() {
                         <label htmlFor="password">Password</label>
                         <input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
                     </div>
-                    <div className="form-actions" style={{ marginTop: 8 }}>
+                    <div className="form-actions" style={{ marginTop: 8, justifyContent: 'space-between' }}>
                         <button type="submit" className="btn" disabled={!email || !password}>Accedi</button>
                         <a href="/register" className="link" style={{ alignSelf: 'center' }}>Registrati</a>
                     </div>
                 </form>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
+                    <div style={{ height: 1, background: 'var(--color-border)', flex: 1 }} />
+                    <span className="muted" style={{ fontSize: 12 }}>oppure</span>
+                    <div style={{ height: 1, background: 'var(--color-border)', flex: 1 }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+                    <div ref={googleDivRef} />
+                </div>
             </div>
         </div>
     );
