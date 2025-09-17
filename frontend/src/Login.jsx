@@ -44,8 +44,8 @@ export default function Login() {
             <div className="topbar" style={{ marginTop: 0, marginBottom: 24 }}>
                 <div className="app-title">SmartTask</div>
                 <div className="topbar-actions">
-                    <button className="btn-ghost" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle dark mode">
-                        {theme === 'light' ? '🌙' : '☀️'}
+                    <button className="btn btn-ghost" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle dark mode">
+                    {theme === 'light' ? '🌙 Dark mode' : '☀️ Light mode'}
                     </button>
                 </div>
             </div>
