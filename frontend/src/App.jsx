@@ -11,7 +11,9 @@ export default function App() {
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
   const [priority, setPriority] = useState('Medium');
-  const [sortedView, setSortedView] = useState(false);
+  const [sortBy, setSortBy] = useState('insertion'); // insertion | deadline | priority
+  const [sortOrder, setSortOrder] = useState('asc'); // asc | desc
+  const [completedFilter, setCompletedFilter] = useState('all'); // all | completed | active
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const navigate = useNavigate();
@@ -67,7 +69,7 @@ export default function App() {
 
   useEffect(() => {
     fetchTasks();
-  }, [sortedView]);
+  }, [sortBy, sortOrder, completedFilter]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -77,8 +79,12 @@ export default function App() {
   const fetchTasks = async () => {
     try {
       const token = localStorage.getItem('token');
-      let url = 'http://localhost:8000/tasks';
-      if (!sortedView) url += '?sort_by=priority&sort_order=asc';
+      const params = new URLSearchParams();
+      if (sortBy) params.append('sort_by', sortBy);
+      if (sortOrder) params.append('sort_order', sortOrder);
+      if (completedFilter === 'completed') params.append('completed', 'true');
+      if (completedFilter === 'active') params.append('completed', 'false');
+      const url = `http://localhost:8000/tasks${params.toString() ? `?${params.toString()}` : ''}`;
       const res = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -168,6 +174,20 @@ export default function App() {
     setPriority(task.priority);
   };
 
+  const toggleCompleted = async (task) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(
+        `http://localhost:8000/tasks/${task.id}/completed`,
+        { completed: !task.completed },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      fetchTasks();
+    } catch (err) {
+      handleAuthError(err);
+    }
+  };
+
   return (
     <div className="page-container">
       <div className="topbar">
@@ -214,17 +234,61 @@ export default function App() {
             {editingTaskId && (
               <button onClick={resetForm} className="btn btn-ghost">Annulla</button>
             )}
-            <button onClick={() => setSortedView((prev) => !prev)} className="btn btn-ghost">
-              {sortedView ? 'Ordina per priorità/scadenza' : 'Vista normale'}
-            </button>
           </div>
         </section>
 
         <section className="card section">
+          <div className="section-title">Ordinamento</div>
+          <div className="form-actions" style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+  <button
+    className="btn btn-ghost"
+    onClick={() => {
+      const options = ['deadline', 'insertion', 'priority'];
+      const labels = {
+        deadline: 'Per scadenza',
+        insertion: 'Per inserimento',
+        priority: 'Per priorità',
+      };
+
+      // prendo l'indice corrente
+      const currentIndex = options.indexOf(sortBy);
+      // calcolo il prossimo
+      const nextIndex = (currentIndex + 1) % options.length;
+      // aggiorno lo stato
+      setSortBy(options[nextIndex]);
+    }}
+    aria-label="Ordina"
+  >
+    {sortBy === 'deadline'
+      ? 'Per scadenza'
+      : sortBy === 'insertion'
+      ? 'Per inserimento'
+      : 'Per priorità'}
+  </button>
+</div>
+            </div>
+            <div>
+              <button className="btn btn-ghost" onClick={() => setSortOrder((prev) => prev === 'asc' ? 'desc' : 'asc')} aria-label="Direzione">
+                {sortOrder === 'asc' ? 'Ascendente' : 'Discendente'}
+              </button>
+            </div>
+            <div>
+              <button
+                className="btn btn-ghost"
+                onClick={() => setCompletedFilter((prev) => prev === 'all' ? 'completed' : prev === 'completed' ? 'active' : 'all')}
+                aria-label="Filtro completamento"
+              >
+                {completedFilter === 'all' ? 'Tutti' : completedFilter === 'completed' ? 'Completati' : 'Attivi'}
+              </button>
+            </div>
+          </div>
+
           <div className="section-title">Task</div>
           <ul className="task-list">
             {tasks.map((task) => (
-              <li key={task.id} className="task-item">
+              <li key={task.id} className={`task-item ${task.completed ? 'completed' : ''}`}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <strong>{task.title}</strong>
@@ -235,6 +299,7 @@ export default function App() {
                   <div className="task-meta" style={{ marginTop: 4 }}>Scadenza: {new Date(task.deadline).toLocaleString()}</div>
                 </div>
                 <div className="actions">
+                  <button onClick={() => toggleCompleted(task)} className="btn btn-success">{task.completed ? '✓ Completato' : 'Segna come completato'}</button>
                   <button onClick={() => startEditing(task)} className="btn btn-ghost">✏️ Modifica</button>
                   <button onClick={() => deleteTask(task.id)} className="btn btn-danger">Elimina</button>
                 </div>

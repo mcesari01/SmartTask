@@ -30,6 +30,7 @@ class TaskBase(BaseModel):
     description: Optional[str] = None
     deadline: datetime
     priority: Optional[str] = "Medium"
+    completed: Optional[bool] = False
 
 class TaskCreate(TaskBase):
     """Schema for task creation."""
@@ -42,3 +43,7 @@ class TaskRead(TaskBase):
 
 
     model_config = ConfigDict(from_attributes=True)
+
+class TaskCompletedUpdate(BaseModel):
+    """Schema for updating completion state of a task."""
+    completed: bool

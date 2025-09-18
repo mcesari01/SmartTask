@@ -17,8 +17,9 @@ from auth import (
     verify_google_id_token_and_get_email,
 )
 from database.database import Base, engine
+from sqlalchemy import inspect, text
 from models import Task as TaskModel, User
-from schemas.schemas import TaskCreate, TaskRead, Token, UserCreate, UserRead
+from schemas.schemas import TaskCreate, TaskRead, Token, UserCreate, UserRead, TaskCompletedUpdate
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -35,6 +36,18 @@ app.add_middleware(
 # Crea tabelle
 # Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
+
+# Lightweight migration: ensure new columns exist in SQLite when upgrading
+try:
+    inspector = inspect(engine)
+    columns = [c["name"] for c in inspector.get_columns("tasks")]
+    if "completed" not in columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN completed BOOLEAN DEFAULT 0"))
+            conn.commit()
+except Exception:
+    # Best-effort; avoid crashing the app if introspection fails
+    pass
 
 @app.post("/register", response_model=UserRead)
 def register(user: UserCreate, db: Session = Depends(get_db)):
@@ -71,12 +84,14 @@ class GoogleAuthPayload(BaseModel):
 def google_auth(payload: GoogleAuthPayload, db: Session = Depends(get_db)):
     """Login/Register via Google ID token. Creates user if not exists, then issues JWT."""
     email = verify_google_id_token_and_get_email(payload.credential)
+
     user = db.query(User).filter(User.email == email).first()
     if not user:
-        user = User(email=email, hashed_password="")
+        user = User(email=email, hashed_password="", auth_provider="google")
         db.add(user)
         db.commit()
         db.refresh(user)
+
     access_token = create_access_token(data={"sub": email})
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -84,25 +99,40 @@ def google_auth(payload: GoogleAuthPayload, db: Session = Depends(get_db)):
 def get_tasks(
     sort_by: Optional[str] = None,
     sort_order: Optional[str] = "asc",
+    completed: Optional[str] = None,  # values: 'true' | 'false' | None (all)
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retrieves tasks for the current user, with optional sorting."""
+    """Retrieves tasks for the current user, with optional sorting and completion filter.
+
+    sort_by: 'insertion' | 'deadline' | 'priority' | None
+    sort_order: 'asc' | 'desc'
+    completed: 'true' | 'false' | None
+    """
     query = db.query(TaskModel).filter(TaskModel.user_id == current_user.id)
+
+    # Filter by completion if requested
+    if completed is not None:
+        if completed.lower() == "true":
+            query = query.filter(TaskModel.completed.is_(True))
+        elif completed.lower() == "false":
+            query = query.filter(TaskModel.completed.is_(False))
+
+    # Sorting logic
     if sort_by == "priority":
         priority_order = case(
             (TaskModel.priority == "High", 1),
             (TaskModel.priority == "Medium", 2),
             (TaskModel.priority == "Low", 3),
-            else_=4
+            else_=4,
         )
-        # Apply compound sorting: first by priority, then by deadline as secondary sort
-        if sort_order == "asc":
-            query = query.order_by(priority_order, TaskModel.deadline)
-        else:
-            query = query.order_by(desc(priority_order), desc(TaskModel.deadline))
+        query = query.order_by(priority_order.asc() if sort_order == "asc" else priority_order.desc())
+    elif sort_by == "deadline":
+        query = query.order_by(TaskModel.deadline.asc() if sort_order == "asc" else TaskModel.deadline.desc())
     else:
-        query = query.order_by(TaskModel.id)
+        # default to insertion order (id)
+        query = query.order_by(TaskModel.id.asc() if sort_order == "asc" else TaskModel.id.desc())
+
     return query.all()
 
 @app.post("/tasks", response_model=TaskRead)
@@ -147,6 +177,24 @@ def update_task(
         raise HTTPException(status_code=404, detail="Task not found or not authorized")
     for key, value in updated_task.model_dump().items():
         setattr(task, key, value)
+    db.commit()
+    db.refresh(task)
+    return task
+
+@app.patch("/tasks/{task_id}/completed", response_model=TaskRead)
+def set_task_completed(
+    task_id: int,
+    payload: TaskCompletedUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Toggle or set task completion state for the current user's task."""
+    task = db.query(TaskModel).filter(
+        TaskModel.id == task_id, TaskModel.user_id == current_user.id
+    ).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found or not authorized")
+    task.completed = payload.completed
     db.commit()
     db.refresh(task)
     return task

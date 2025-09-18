@@ -102,6 +102,9 @@ code {
 .btn-danger { background: var(--color-danger); }
 .btn-danger:hover { background: var(--color-danger-hover); }
 
+.btn-success { background: var(--color-success); color: #033a1a; }
+.btn-success:hover { background: var(--color-success); color: #033a1a; filter: brightness(0.8); }
+
 .btn-ghost {
   background: transparent;
   color: var(--color-text);
@@ -205,6 +208,11 @@ input:focus, select:focus, textarea:focus {
 .badge.low { background: color-mix(in srgb, var(--color-success) 14%, transparent); color: var(--color-success); }
 
 .actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+.task-item.completed {
+  opacity: 0.8;
+  background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface));
+}
 
 /* Auth pages */
 .centered-page { max-width: 420px; margin: 0 auto; padding: var(--space-8) var(--space-6); }
