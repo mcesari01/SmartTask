@@ -65,14 +65,14 @@ export default function Login() {
             script.defer = true;
             script.id = scriptId;
             script.onload = () => {
-                // eslint-disable-next-line no-undef
+                 
                 window.google?.accounts.id.initialize({
                     client_id: clientId,
                     callback: handleCredentialResponse,
                     ux_mode: 'popup',
                 });
                 if (googleDivRef.current) {
-                    // eslint-disable-next-line no-undef
+                     
                     window.google?.accounts.id.renderButton(googleDivRef.current, {
                         theme: theme === 'light' ? 'outline' : 'filled_black',
                         size: 'large',
@@ -84,14 +84,14 @@ export default function Login() {
             };
             document.body.appendChild(script);
         } else {
-            // eslint-disable-next-line no-undef
+             
             window.google?.accounts.id.initialize({
                 client_id: clientId,
                 callback: handleCredentialResponse,
                 ux_mode: 'popup',
             });
             if (googleDivRef.current) {
-                // eslint-disable-next-line no-undef
+                 
                 window.google?.accounts.id.renderButton(googleDivRef.current, {
                     theme: theme === 'light' ? 'outline' : 'filled_black',
                     size: 'large',

@@ -246,11 +246,12 @@ export default function App() {
     className="btn btn-ghost"
     onClick={() => {
       const options = ['deadline', 'insertion', 'priority'];
+      /*
       const labels = {
         deadline: 'Per scadenza',
         insertion: 'Per inserimento',
         priority: 'Per priorità',
-      };
+      };*/
 
       // prendo l'indice corrente
       const currentIndex = options.indexOf(sortBy);
