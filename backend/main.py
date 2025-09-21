@@ -1,12 +1,22 @@
 """Main application file for the SmartTask backend."""
 
 from typing import List, Optional
+import csv
+import io
+from datetime import datetime
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import case, desc
 from sqlalchemy.orm import Session
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
 
 from auth import (
     create_access_token,
@@ -214,3 +224,150 @@ def delete_task(
     db.delete(task)
     db.commit()
     return {"detail": "Task deleted"}
+
+
+@app.get("/tasks/export/csv")
+def export_tasks_csv(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exports all tasks for the current user as CSV."""
+    tasks = db.query(TaskModel).filter(TaskModel.user_id == current_user.id).all()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow(['ID', 'Title', 'Description', 'Deadline', 'Priority', 'Completed'])
+    
+    # Write tasks
+    for task in tasks:
+        writer.writerow([
+            task.id,
+            task.title,
+            task.description or '',
+            task.deadline.strftime('%Y-%m-%d %H:%M:%S') if task.deadline else '',
+            task.priority,
+            'Yes' if task.completed else 'No'
+        ])
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode('utf-8')),
+        media_type='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=tasks.csv'}
+    )
+
+
+@app.get("/tasks/export/excel")
+def export_tasks_excel(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exports all tasks for the current user as Excel."""
+    tasks = db.query(TaskModel).filter(TaskModel.user_id == current_user.id).all()
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Tasks"
+    
+    # Style for header
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+    
+    # Write header
+    headers = ['ID', 'Title', 'Description', 'Deadline', 'Priority', 'Completed']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+    
+    # Write tasks
+    for row, task in enumerate(tasks, 2):
+        ws.cell(row=row, column=1, value=task.id)
+        ws.cell(row=row, column=2, value=task.title)
+        ws.cell(row=row, column=3, value=task.description or '')
+        ws.cell(row=row, column=4, value=task.deadline.strftime('%Y-%m-%d %H:%M:%S') if task.deadline else '')
+        ws.cell(row=row, column=5, value=task.priority)
+        ws.cell(row=row, column=6, value='Yes' if task.completed else 'No')
+    
+    # Auto-adjust column widths
+    for column in ws.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = min(max_length + 2, 50)
+        ws.column_dimensions[column_letter].width = adjusted_width
+    
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename=tasks.xlsx'}
+    )
+
+
+@app.get("/tasks/export/pdf")
+def export_tasks_pdf(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exports all tasks for the current user as PDF."""
+    tasks = db.query(TaskModel).filter(TaskModel.user_id == current_user.id).all()
+    
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    
+    # Title
+    title = Paragraph("SmartTask - Export Tasks", styles['Title'])
+    story.append(title)
+    story.append(Spacer(1, 12))
+    
+    # Table data
+    data = [['ID', 'Title', 'Description', 'Deadline', 'Priority', 'Completed']]
+    
+    for task in tasks:
+        data.append([
+            str(task.id),
+            task.title,
+            task.description or '',
+            task.deadline.strftime('%Y-%m-%d %H:%M') if task.deadline else '',
+            task.priority,
+            'Yes' if task.completed else 'No'
+        ])
+    
+    # Create table
+    table = Table(data)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    
+    story.append(table)
+    doc.build(story)
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type='application/pdf',
+        headers={'Content-Disposition': 'attachment; filename=tasks.pdf'}
+    )

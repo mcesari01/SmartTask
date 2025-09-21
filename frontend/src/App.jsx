@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import ExportModal from './ExportModal';
 
 export default function App() {
   const [tasks, setTasks] = useState([]);
@@ -16,6 +17,7 @@ export default function App() {
   const [completedFilter, setCompletedFilter] = useState('all'); // all | completed | active
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+  const [showExportModal, setShowExportModal] = useState(false);
   const navigate = useNavigate();
 
   const resetForm = () => {
@@ -196,6 +198,9 @@ export default function App() {
           <button className="btn btn-ghost" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle dark mode">
             {theme === 'light' ? '🌙 Dark mode' : '☀️ Light mode'}
           </button>
+          <button className="btn btn-ghost" onClick={() => setShowExportModal(true)} aria-label="Export tasks">
+            📤 Esporta
+          </button>
           <button onClick={handleLogout} className="btn btn-danger"><svg width="12" height="12" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h7v2H5v14h7v2zm11-4l-1.375-1.45l2.55-2.55H9v-2h8.175l-2.55-2.55L16 7l5 5z"/></svg> Esci</button>
         </div>
       </div>
@@ -310,6 +315,10 @@ export default function App() {
         </section>
       </div>
       <ToastContainer />
+      <ExportModal 
+        isOpen={showExportModal} 
+        onClose={() => setShowExportModal(false)} 
+      />
     </div>
   );
 }
