@@ -339,9 +339,9 @@ def export_tasks_pdf(
     # Table data
     data = [['ID', 'Title', 'Description', 'Deadline', 'Priority', 'Completed']]
     
-    for task in tasks:
+    for i, task in enumerate(tasks, start=1):
         data.append([
-            str(task.id),
+            str(i),
             task.title,
             task.description or '',
             task.deadline.strftime('%Y-%m-%d %H:%M') if task.deadline else '',
