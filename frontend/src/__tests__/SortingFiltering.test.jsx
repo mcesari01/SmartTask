@@ -26,38 +26,55 @@ test('renders Ordinamento section with sorting/filtering buttons', async () => {
   render(<App />);
 
   expect(await screen.findByText('Ordinamento')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Ordina/i })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Direzione/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Per inserimento/i })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Filtro completamento/i })).toBeInTheDocument();
 });
 
-test('clicking sort order button triggers backend call with correct params', async () => {
+test('clicking active sort button toggles sort order and triggers backend call', async () => {
   axios.get.mockResolvedValue({ data: [] });
   render(<App />);
   await screen.findByText('Ordinamento');
 
-  fireEvent.click(screen.getByRole('button', { name: /Direzione/i }));
+  // Click the sort dropdown to open it
+  const sortDropdown = screen.getByRole('button', { name: /Per inserimento/i });
+  fireEvent.click(sortDropdown);
+  
+  // Click on the same option (Per inserimento) which should toggle sort order
   await waitFor(() => {
-    expect(axios.get).toHaveBeenLastCalledWith(
-      expect.stringContaining('/tasks?'),
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+  
+  const insertionMenuItem = screen.getByRole('menuitem', { name: /Per inserimento/i });
+  fireEvent.click(insertionMenuItem);
+  
+  await waitFor(() => {
+    expect(axios.get).toHaveBeenCalledWith(
+      expect.stringContaining('sort_order=desc'),
       expect.objectContaining({ headers: expect.any(Object) })
     );
   });
 });
 
-test('cycling through sortBy options calls backend with correct params', async () => {
+test('selecting different sort options calls backend with correct params', async () => {
   axios.get.mockResolvedValue({ data: [] });
   render(<App />);
   await screen.findByText('Ordinamento');
 
-  const sortBtn = screen.getByRole('button', { name: /Ordina/i });
-
-  fireEvent.click(sortBtn); // insertion → deadline
-  fireEvent.click(sortBtn); // deadline → priority
+  // Click the sort dropdown to open it
+  const sortDropdown = screen.getByRole('button', { name: /Per inserimento/i });
+  fireEvent.click(sortDropdown);
+  
+  // Wait for menu to appear and click on "Per priorità"
+  await waitFor(() => {
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+  
+  const priorityMenuItem = screen.getByRole('menuitem', { name: /Per priorità/i });
+  fireEvent.click(priorityMenuItem);
 
   await waitFor(() => {
     expect(axios.get).toHaveBeenCalledWith(
-      expect.stringContaining('/tasks?sort_by=priority'),
+      expect.stringContaining('sort_by=priority'),
       expect.any(Object)
     );
   });

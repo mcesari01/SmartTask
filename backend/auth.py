@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta
-from typing import Generator, Optional
+from typing import Generator, Optional, Any
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -38,10 +38,14 @@ def get_db() -> Generator:
 
 
 # --- Password utilities ---
-def verify_password(plain_password: str, hashed_password: str) -> bool:
+def verify_password(plain_password: str, hashed_password: Any) -> bool:
     if not hashed_password:
         return False
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        hashed_value = str(hashed_password)
+    except Exception:
+        return False
+    return pwd_context.verify(plain_password, hashed_value)
 
 
 def get_password_hash(password: str) -> str:
@@ -99,7 +103,6 @@ def verify_google_id_token_and_get_email(google_id_token_str: str) -> str:
             raise ValueError("Missing email in Google token")
         return email
     except Exception as exc:
-        # In development, allow insecure fallback by decoding claims without verifying signature
         if GOOGLE_DEV_ALLOW_INSECURE:
             try:
                 unverified = jwt.get_unverified_claims(google_id_token_str)

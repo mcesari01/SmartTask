@@ -23,6 +23,7 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
+  --title-gradient: linear-gradient(90deg, #1e40af 0%, #7c3aed 40%, #06b6d4 100%);
 }
 
 [data-theme="dark"] {
@@ -39,6 +40,11 @@
   --color-success: #34d399;
   --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 8px 30px rgba(0,0,0,0.45);
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+}
+
+/* Dark theme override for title gradient */
+[data-theme="dark"] {
+  --title-gradient: linear-gradient(90deg, #60a5fa 0%, #a78bfa 40%, #34d399 100%);
 }
 
 html, body, #root {
@@ -76,8 +82,39 @@ code {
 }
 
 .app-title {
-  font-size: 30px;
+  font-size: 2.5rem;
   font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  display: inline-block; 
+  background-image: var(--title-gradient);
+  background-size: 300% 100%; 
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  margin-bottom: 1.5rem;
+  margin-top: 20px;
+  text-align: center;
+  animation: fadeIn 0.8s ease-in-out, gradientShift 6s ease-in-out infinite;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.06), 0 6px 20px rgba(0,0,0,0.06);
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 .topbar-actions {
@@ -157,6 +194,8 @@ input[type="text"],
 input[type="email"],
 input[type="password"],
 input[type="datetime-local"],
+input[type="date"],
+input[type="time"],
 select, textarea {
   background: var(--color-surface);
   color: var(--color-text);
@@ -167,9 +206,21 @@ select, textarea {
   transition: border 0.15s ease, box-shadow 0.15s ease;
 }
 
-input:focus, select:focus, textarea:focus {
+input:focus, input[type="date"]:focus, input[type="time"]:focus, select:focus, textarea:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+/* Make form controls span full width inside fields for consistent layout */
+.field input[type="date"],
+.field input[type="time"],
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="password"],
+.field input[type="datetime-local"],
+.field select, .field textarea {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .form-actions {

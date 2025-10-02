@@ -28,7 +28,7 @@ class TaskBase(BaseModel):
     """Base schema for tasks."""
     title: str
     description: Optional[str] = None
-    deadline: datetime
+    deadline: Optional[datetime] = None
     priority: Optional[str] = "Medium"
     completed: Optional[bool] = False
 

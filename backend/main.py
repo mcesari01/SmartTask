@@ -130,15 +130,19 @@ def get_tasks(
 
     # Sorting logic
     if sort_by == "priority":
+        # Map priorities so that higher numeric value means higher priority.
+        # With this mapping, ordering DESC will place High-priority tasks first.
         priority_order = case(
-            (TaskModel.priority == "High", 1),
+            (TaskModel.priority == "High", 3),
             (TaskModel.priority == "Medium", 2),
-            (TaskModel.priority == "Low", 3),
-            else_=4,
+            (TaskModel.priority == "Low", 1),
+            else_=0,
         )
-        query = query.order_by(priority_order.asc() if sort_order == "asc" else priority_order.desc())
+        query = query.order_by(priority_order.desc() if sort_order == "desc" else priority_order.asc())
     elif sort_by == "deadline":
-        query = query.order_by(TaskModel.deadline.asc() if sort_order == "asc" else TaskModel.deadline.desc())
+        # Interpreting "desc" as: items with closer deadlines should come first.
+        # So when sort_order == 'desc' we order by deadline ascending (earliest/closest first).
+        query = query.order_by(TaskModel.deadline.asc() if sort_order == "desc" else TaskModel.deadline.desc())
     else:
         # default to insertion order (id)
         query = query.order_by(TaskModel.id.asc() if sort_order == "asc" else TaskModel.id.desc())

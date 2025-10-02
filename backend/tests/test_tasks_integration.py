@@ -40,7 +40,8 @@ def test_sort_by_priority_then_deadline(client, auth_headers):
     for t in tasks:
         client.post("/tasks", json=t, headers=auth_headers)
 
-    res = client.get("/tasks", headers=auth_headers, params={"sort_by": "priority", "sort_order": "asc"})
+    # descending priority so High priority tasks appear first
+    res = client.get("/tasks", headers=auth_headers, params={"sort_by": "priority", "sort_order": "desc"})
     assert res.status_code == 200
     data = res.json()
     assert data[0]["priority"] == "High"
