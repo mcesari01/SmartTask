@@ -130,3 +130,127 @@ test('toggle theme in login page', () => {
   fireEvent.click(toggle);
   expect(localStorage.getItem('theme')).toBe('dark');
 });
+
+// ---------- EXTRA TESTS PER COPRIRE GOOGLE LOGIN/REGISTER ----------
+
+test('login via Google successful', async () => {
+  const fakeGoogle = { accounts: { id: { initialize: vi.fn(), renderButton: vi.fn() } } };
+  window.google = fakeGoogle;
+  axios.post.mockResolvedValueOnce({ data: { access_token: 'gTok' } });
+
+  render(
+    <MemoryRouter>
+      <Login />
+    </MemoryRouter>
+  );
+
+  const cb = fakeGoogle.accounts.id.initialize.mock.calls[0][0].callback;
+  cb({ credential: 'jwt' });
+
+  await waitFor(() => {
+    expect(localStorage.getItem('token')).toBe('gTok');
+    expect(mockNavigate).toHaveBeenCalledWith('/');
+  });
+});
+
+test('login via Google fails', async () => {
+  const fakeGoogle = { accounts: { id: { initialize: vi.fn(), renderButton: vi.fn() } } };
+  window.google = fakeGoogle;
+  axios.post.mockRejectedValueOnce(new Error('fail'));
+
+  render(
+    <MemoryRouter>
+      <Login />
+    </MemoryRouter>
+  );
+
+  const cb = fakeGoogle.accounts.id.initialize.mock.calls[0][0].callback;
+  cb({ credential: 'bad' });
+
+  await waitFor(() => {
+    expect(screen.getByText(/Accesso con Google non riuscito./i)).toBeInTheDocument();
+  });
+});
+
+test('login via Google ignored if no credential', () => {
+  const fakeGoogle = { accounts: { id: { initialize: vi.fn(), renderButton: vi.fn() } } };
+  window.google = fakeGoogle;
+
+  render(
+    <MemoryRouter>
+      <Login />
+    </MemoryRouter>
+  );
+
+  const cb = fakeGoogle.accounts.id.initialize.mock.calls[0][0].callback;
+  cb({}); // no credential
+  expect(axios.post).not.toHaveBeenCalled();
+});
+
+test('register via Google successful', async () => {
+  const fakeGoogle = { accounts: { id: { initialize: vi.fn(), renderButton: vi.fn() } } };
+  window.google = fakeGoogle;
+  axios.post.mockResolvedValueOnce({ data: { access_token: 'regTok' } });
+
+  render(
+    <MemoryRouter>
+      <Register />
+    </MemoryRouter>
+  );
+
+  const cb = fakeGoogle.accounts.id.initialize.mock.calls[0][0].callback;
+  cb({ credential: 'jwt' });
+
+  await waitFor(() => {
+    expect(localStorage.getItem('token')).toBe('regTok');
+    expect(mockNavigate).toHaveBeenCalledWith('/');
+  });
+});
+
+test('register via Google ignored if no credential', () => {
+  const fakeGoogle = { accounts: { id: { initialize: vi.fn(), renderButton: vi.fn() } } };
+  window.google = fakeGoogle;
+
+  render(
+    <MemoryRouter>
+      <Register />
+    </MemoryRouter>
+  );
+
+  const cb = fakeGoogle.accounts.id.initialize.mock.calls[0][0].callback;
+  cb({}); // no credential
+  expect(axios.post).not.toHaveBeenCalled();
+});
+
+test('register via Google fails silently', async () => {
+  const fakeGoogle = { accounts: { id: { initialize: vi.fn(), renderButton: vi.fn() } } };
+  window.google = fakeGoogle;
+  axios.post.mockRejectedValueOnce(new Error('fail'));
+
+  render(
+    <MemoryRouter>
+      <Register />
+    </MemoryRouter>
+  );
+
+  const cb = fakeGoogle.accounts.id.initialize.mock.calls[0][0].callback;
+  cb({ credential: 'bad' });
+
+  // Deve fallire ma senza mostrare messaggi di errore in UI
+  await waitFor(() => {
+    expect(screen.queryByText(/Errore durante la registrazione/i)).not.toBeInTheDocument();
+  });
+});
+
+test('login button disabled until both email and password filled', () => {
+  render(
+    <MemoryRouter>
+      <Login />
+    </MemoryRouter>
+  );
+  const loginBtn = screen.getByRole('button', { name: /Accedi/i });
+  expect(loginBtn).toBeDisabled();
+  fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'u@example.com' } });
+  fireEvent.change(screen.getByLabelText(/Password/i), { target: { value: 'pw' } });
+  expect(loginBtn).not.toBeDisabled();
+});
