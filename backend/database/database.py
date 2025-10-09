@@ -1,5 +1,8 @@
 """Database configuration and utilities."""
 import os
+from datetime import datetime
+from typing import Generator
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
@@ -7,6 +10,10 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tasks.db")
 SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 
+# Optional: create parent directory if missing
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
+# Debug prints (you can remove these if verbose)
 print(f"Database path: {DB_PATH}")
 print(f"Database exists: {os.path.exists(DB_PATH)}")
 

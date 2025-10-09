@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import ExportModal from './ExportModal';
+import { useGoogleLogin } from '@react-oauth/google';
 
 export default function App() {
   const [tasks, setTasks] = useState([]);
@@ -21,6 +22,7 @@ export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [showExportModal, setShowExportModal] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [googleAccessToken, setGoogleAccessToken] = useState(null); // <-- stato Google Calendar connection
   const navigate = useNavigate();
   const sortMenuRef = useRef(null);
 
@@ -104,6 +106,68 @@ export default function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // --- Google OAuth (calendar connect) ---
+  const googleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      // tokenResponse.access_token è quello che serve per Calendar
+      const access_token = tokenResponse.access_token;
+      setGoogleAccessToken(access_token);
+      toast.success('Google Calendar connesso!');
+
+      // salviamo il token sul backend così il server può usarlo per creare eventi
+      try {
+        const token = localStorage.getItem('token');
+        await axios.post(
+          'http://localhost:8000/google-auth',
+          { access_token },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        // sincronizza i task esistenti (tentativo semplice: non gestisce dedup)
+        for (const t of tasks) {
+          if (!t.deadline) continue;
+          try {
+            await axios.post(
+              'http://localhost:8000/google-calendar/events',
+              {
+                summary: t.title,
+                description: t.description || '',
+                start: { dateTime: new Date(t.deadline).toISOString(), timeZone: 'Europe/Rome' },
+                end: { dateTime: new Date(new Date(t.deadline).getTime() + 3600000).toISOString(), timeZone: 'Europe/Rome' },
+              },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+          } catch (e) {
+            // ignora errori singoli
+          }
+        }
+      } catch (err) {
+        toast.error('Errore durante il salvataggio del token Google sul server.');
+      }
+    },
+    onError: () => {
+      toast.error('Errore durante l\'autenticazione Google');
+    },
+    scope: 'https://www.googleapis.com/auth/calendar',
+  });
+
+  // Recupera anche dal server se l'utente ha già salvato un access token (stato "connesso")
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setGoogleAccessToken(null);
+      return;
+    }
+    axios.get('http://localhost:8000/me', {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(res => {
+      if (res.data.google_access_token) {
+        setGoogleAccessToken(res.data.google_access_token);
+      } else {
+        setGoogleAccessToken(null);
+      }
+    }).catch(() => setGoogleAccessToken(null));
+  }, []);
+
   const fetchTasks = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -137,6 +201,27 @@ export default function App() {
       const combined = new Date(`${deadlineDate}T${timePart}`);
       const body = { title, description, priority, deadline: combined.toISOString() };
       await axios.post('http://localhost:8000/tasks', body, { headers: { Authorization: `Bearer ${token}` } });
+
+      // se l'utente ha connesso Google Calendar, creiamo anche l'evento
+      if (googleAccessToken) {
+        try {
+          await axios.post(
+            'http://localhost:8000/google-calendar/events',
+            {
+              summary: title,
+              description: description || '',
+              start: { dateTime: combined.toISOString(), timeZone: 'Europe/Rome' },
+              end: { dateTime: new Date(combined.getTime() + 3600000).toISOString(), timeZone: 'Europe/Rome' },
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          toast.success('Evento aggiunto a Google Calendar!');
+        } catch {
+          // non bloccare la creazione del task
+          toast.warn('Task creato ma errore durante la sincronizzazione su Google Calendar.');
+        }
+      }
+
       resetForm();
       fetchTasks();
     } catch (err) {
@@ -235,6 +320,17 @@ export default function App() {
           <button className="btn btn-ghost" onClick={() => setShowExportModal(true)} aria-label="Export tasks">
             📤 Esporta
           </button>
+
+          {/* Google Calendar connect button / indicator (added, same visual footprint) */}
+          {googleAccessToken ? (
+            <div className="btn btn-ghost" style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 10h4v10H3zM10 3h4v17h-4zM17 14h4v6h-4z"/></svg>
+              Google Calendar collegato
+            </div>
+          ) : (
+            <button onClick={() => googleLogin()} className="btn btn-primary">Connetti Google Calendar</button>
+          )}
+
           <button onClick={handleLogout} className="btn btn-danger"><svg width="12" height="12" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h7v2H5v14h7v2zm11-4l-1.375-1.45l2.55-2.55H9v-2h8.175l-2.55-2.55L16 7l5 5z"/></svg> Esci</button>
         </div>
       </div>

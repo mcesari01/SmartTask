@@ -116,3 +116,22 @@ def verify_google_id_token_and_get_email(google_id_token_str: str) -> str:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Google token verification failed",
         ) from exc
+
+
+# --- Helpers for Google token storage ---
+def save_google_tokens_for_user(db: Session, user: User, access_token: str, refresh_token: Optional[str] = None, expires_in: Optional[int] = None):
+    """
+    Save access_token / refresh_token / expiry on the user model.
+    """
+    user.google_access_token = access_token
+    if refresh_token:
+        user.google_refresh_token = refresh_token
+    if expires_in:
+        try:
+            user.google_token_expiry = datetime.utcnow() + timedelta(seconds=int(expires_in))
+        except Exception:
+            user.google_token_expiry = None
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+

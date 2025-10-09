@@ -3,14 +3,15 @@
 from typing import List, Optional
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import case, desc
+from sqlalchemy import case, desc, text, inspect
 from sqlalchemy.orm import Session
+import requests
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 from reportlab.lib.pagesizes import letter
@@ -27,9 +28,17 @@ from auth import (
     verify_google_id_token_and_get_email,
 )
 from database.database import Base, engine
-from sqlalchemy import inspect, text
 from models import Task as TaskModel, User
-from schemas.schemas import TaskCreate, TaskRead, Token, UserCreate, UserRead, TaskCompletedUpdate
+from schemas.schemas import (
+    TaskCreate,
+    TaskRead,
+    Token,
+    UserCreate,
+    UserRead,
+    TaskCompletedUpdate,
+    GoogleSaveToken,
+    CalendarEventCreate,
+)
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -37,27 +46,50 @@ app = FastAPI()
 # Configura CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Restringi al frontend
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],  # Frontend dev origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Crea tabelle
-# Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
 
 # Lightweight migration: ensure new columns exist in SQLite when upgrading
 try:
     inspector = inspect(engine)
-    columns = [c["name"] for c in inspector.get_columns("tasks")]
-    if "completed" not in columns:
+    # tasks table: add completed (already present in your file), add google_event_id if missing
+    try:
+        task_columns = [c["name"] for c in inspector.get_columns("tasks")]
         with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE tasks ADD COLUMN completed BOOLEAN DEFAULT 0"))
-            conn.commit()
+            if "completed" not in task_columns:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN completed BOOLEAN DEFAULT 0"))
+                conn.commit()
+            if "google_event_id" not in task_columns:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN google_event_id TEXT"))
+                conn.commit()
+    except Exception:
+        pass
+
+    # users table: add google token fields if missing
+    try:
+        user_columns = [c["name"] for c in inspector.get_columns("users")]
+        with engine.connect() as conn:
+            if "google_access_token" not in user_columns:
+                conn.execute(text("ALTER TABLE users ADD COLUMN google_access_token TEXT"))
+                conn.commit()
+            if "google_refresh_token" not in user_columns:
+                conn.execute(text("ALTER TABLE users ADD COLUMN google_refresh_token TEXT"))
+                conn.commit()
+            if "google_token_expiry" not in user_columns:
+                conn.execute(text("ALTER TABLE users ADD COLUMN google_token_expiry DATETIME"))
+                conn.commit()
+    except Exception:
+        pass
 except Exception:
     # Best-effort; avoid crashing the app if introspection fails
     pass
+
 
 @app.post("/register", response_model=UserRead)
 def register(user: UserCreate, db: Session = Depends(get_db)):
@@ -71,6 +103,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     return db_user
+
 
 @app.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -105,6 +138,117 @@ def google_auth(payload: GoogleAuthPayload, db: Session = Depends(get_db)):
     access_token = create_access_token(data={"sub": email})
     return {"access_token": access_token, "token_type": "bearer"}
 
+
+@app.get("/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    """
+    Return minimal user info for frontend usage.
+    NOTE: returns google_access_token (string) if present to match frontend checks.
+    If you prefer not to expose the token, change to return only a boolean.
+    """
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "google_access_token": current_user.google_access_token,
+        "google_connected": bool(current_user.google_access_token),
+    }
+
+
+@app.post("/google-auth")
+def save_google_token(
+    payload: GoogleSaveToken,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Receives an access_token (and optionally refresh_token/expires_in) from frontend (OAuth flow)
+    and stores it for the current user.
+    """
+    if not payload.access_token:
+        raise HTTPException(status_code=400, detail="access_token required")
+
+    current_user.google_access_token = payload.access_token
+    if payload.refresh_token:
+        current_user.google_refresh_token = payload.refresh_token
+    if payload.expires_in:
+        try:
+            expires_in_seconds = int(payload.expires_in)
+            current_user.google_token_expiry = datetime.utcnow() + timedelta(seconds=expires_in_seconds)
+        except Exception:
+            # ignore parse errors
+            pass
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return {"detail": "google token saved"}
+
+
+@app.post("/google-calendar/events")
+def create_google_event(
+    event: CalendarEventCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Creates an event on the user's primary Google Calendar.
+    Uses the saved google_access_token for the current user; as fallback the request may include access_token.
+    Expected event body: { summary, description, start: { dateTime, timeZone }, end: { dateTime, timeZone } }
+    """
+    token_to_use = current_user.google_access_token or event.access_token
+    if not token_to_use:
+        raise HTTPException(status_code=400, detail="No Google access token available. Connect Google Calendar first.")
+
+    # Ensure start/end are plain dicts (Pydantic models -> dict)
+    def to_plain(o):
+        # if it's a pydantic v2 model, use model_dump(); if it's already a dict, return as-is
+        try:
+            model_dump = getattr(o, "model_dump", None)
+            if callable(model_dump):
+                return model_dump()
+        except Exception:
+            pass
+        # fallback: if it behaves like dict, return it
+        if isinstance(o, dict):
+            return o
+        # final fallback: build dict from attributes
+        return {"dateTime": getattr(o, "dateTime", None), "timeZone": getattr(o, "timeZone", None)}
+
+    start_obj = to_plain(event.start)
+    end_obj = to_plain(event.end)
+
+    url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+    headers = {"Authorization": f"Bearer {token_to_use}", "Content-Type": "application/json"}
+    body = {
+        "summary": event.summary,
+        "description": event.description or "",
+        "start": start_obj,
+        "end": end_obj,
+    }
+
+    resp = requests.post(url, json=body, headers=headers)
+    if resp.status_code == 401:
+        # token invalid/expired
+        raise HTTPException(status_code=401, detail="Google token invalid or expired")
+    if not resp.ok:
+        raise HTTPException(status_code=resp.status_code, detail=f"Google Calendar API error: {resp.text}")
+
+    created = resp.json()
+    # Optionally link the created event to the task if client provided task_id
+    if event.task_id:
+        try:
+            task = db.query(TaskModel).filter(TaskModel.id == event.task_id, TaskModel.user_id == current_user.id).first()
+            if task:
+                task.google_event_id = created.get("id")
+                db.add(task)
+                db.commit()
+        except Exception:
+            pass
+
+    return created
+
+
+
 @app.get("/tasks", response_model=List[TaskRead])
 def get_tasks(
     sort_by: Optional[str] = None,
@@ -130,8 +274,6 @@ def get_tasks(
 
     # Sorting logic
     if sort_by == "priority":
-        # Map priorities so that higher numeric value means higher priority.
-        # With this mapping, ordering DESC will place High-priority tasks first.
         priority_order = case(
             (TaskModel.priority == "High", 3),
             (TaskModel.priority == "Medium", 2),
@@ -141,13 +283,12 @@ def get_tasks(
         query = query.order_by(priority_order.desc() if sort_order == "desc" else priority_order.asc())
     elif sort_by == "deadline":
         # Interpreting "desc" as: items with closer deadlines should come first.
-        # So when sort_order == 'desc' we order by deadline ascending (earliest/closest first).
         query = query.order_by(TaskModel.deadline.asc() if sort_order == "desc" else TaskModel.deadline.desc())
     else:
-        # default to insertion order (id)
         query = query.order_by(TaskModel.id.asc() if sort_order == "asc" else TaskModel.id.desc())
 
     return query.all()
+
 
 @app.post("/tasks", response_model=TaskRead)
 def create_task(
@@ -162,6 +303,7 @@ def create_task(
     db.refresh(db_task)
     return db_task
 
+
 @app.get("/tasks/{task_id}", response_model=TaskRead)
 def get_task(
     task_id: int,
@@ -175,6 +317,7 @@ def get_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found or not authorized")
     return task
+
 
 @app.put("/tasks/{task_id}", response_model=TaskRead)
 def update_task(
@@ -195,6 +338,7 @@ def update_task(
     db.refresh(task)
     return task
 
+
 @app.patch("/tasks/{task_id}/completed", response_model=TaskRead)
 def set_task_completed(
     task_id: int,
@@ -212,6 +356,7 @@ def set_task_completed(
     db.commit()
     db.refresh(task)
     return task
+
 
 @app.delete("/tasks/{task_id}")
 def delete_task(
