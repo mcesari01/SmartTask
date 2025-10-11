@@ -382,12 +382,32 @@ export default function App() {
 
           {/* Google Calendar connect button / indicator (added, same visual footprint) */}
           {googleAccessToken ? (
-            <div className="btn btn-ghost" style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 10h4v10H3zM10 3h4v17h-4zM17 14h4v6h-4z"/></svg>
+            <button className="btn" disabled style={{ display: 'inline-flex', gap: 8, alignItems: 'center', cursor: 'default', fontSize: '0.75em' }} aria-label="Google Calendar collegato">
+              <svg 
+                width="12" 
+                height="12" 
+                viewBox="0 0 24 24" 
+                xmlns="http://www.w3.org/2000/svg" 
+                style={{ marginRight: 4 }}
+              >
+                <path fill="currentColor" d="M18.316 5.684H24v12.632h-5.684zM5.684 24h12.632v-5.684H5.684zM18.316 5.684V0H1.895A1.894 1.894 0 0 0 0 1.895v16.421h5.684V5.684zm-7.207 6.25v-.065q.407-.216.687-.617c.28-.401.279-.595.279-.982q0-.568-.3-1.025a2.05 2.05 0 0 0-.832-.714a2.7 2.7 0 0 0-1.197-.257q-.9 0-1.481.467q-.579.467-.793 1.078l1.085.452q.13-.374.413-.633q.284-.258.767-.257q.495 0 .816.264a.86.86 0 0 1 .322.703q0 .495-.36.778t-.886.284h-.567v1.085h.633q.611 0 1.02.327q.407.327.407.843q0 .505-.387.832c-.387.327-.565.327-.924.327q-.527 0-.897-.311q-.372-.312-.521-.881l-1.096.452q.268.923.977 1.401q.707.479 1.538.477a2.84 2.84 0 0 0 1.293-.291q.574-.29.902-.794q.327-.505.327-1.149q0-.643-.344-1.105a2.07 2.07 0 0 0-.881-.689m2.093-1.931l.602.913L15 10.045v5.744h1.187V8.446h-.827zM22.105 0h-3.289v5.184H24V1.895A1.894 1.894 0 0 0 22.105 0m-3.289 23.5l4.684-4.684h-4.684zM0 22.105C0 23.152.848 24 1.895 24h3.289v-5.184H0z"/>
+              </svg>
               Google Calendar collegato
-            </div>
+            </button>
           ) : (
-            <button onClick={handleGoogleConnect} className="btn btn-primary">Connetti Google Calendar</button>
+            <button onClick={handleGoogleConnect} className="btn" style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <svg 
+                width="12" 
+                height="12" 
+                viewBox="0 0 24 24" 
+                xmlns="http://www.w3.org/2000/svg" 
+                className="mr-2"
+                style={{ marginRight: 4 }}
+              >
+                <path fill="currentColor" d="M18.316 5.684H24v12.632h-5.684zM5.684 24h12.632v-5.684H5.684zM18.316 5.684V0H1.895A1.894 1.894 0 0 0 0 1.895v16.421h5.684V5.684zm-7.207 6.25v-.065q.407-.216.687-.617c.28-.401.279-.595.279-.982q0-.568-.3-1.025a2.05 2.05 0 0 0-.832-.714a2.7 2.7 0 0 0-1.197-.257q-.9 0-1.481.467q-.579.467-.793 1.078l1.085.452q.13-.374.413-.633q.284-.258.767-.257q.495 0 .816.264a.86.86 0 0 1 .322.703q0 .495-.36.778t-.886.284h-.567v1.085h.633q.611 0 1.02.327q.407.327.407.843q0 .505-.387.832c-.387.327-.565.327-.924.327q-.527 0-.897-.311q-.372-.312-.521-.881l-1.096.452q.268.923.977 1.401q.707.479 1.538.477a2.84 2.84 0 0 0 1.293-.291q.574-.29.902-.794q.327-.505.327-1.149q0-.643-.344-1.105a2.07 2.07 0 0 0-.881-.689m2.093-1.931l.602.913L15 10.045v5.744h1.187V8.446h-.827zM22.105 0h-3.289v5.184H24V1.895A1.894 1.894 0 0 0 22.105 0m-3.289 23.5l4.684-4.684h-4.684zM0 22.105C0 23.152.848 24 1.895 24h3.289v-5.184H0z"/>
+              </svg>
+              Connetti Google Calendar
+              </button>
           )}
 
           <button onClick={handleLogout} className="btn btn-danger"><svg width="12" height="12" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h7v2H5v14h7v2zm11-4l-1.375-1.45l2.55-2.55H9v-2h8.175l-2.55-2.55L16 7l5 5z"/></svg> Esci</button>
