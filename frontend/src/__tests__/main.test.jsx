@@ -1,7 +1,12 @@
 // src/__tests__/main.test.jsx
-import { vi } from 'vitest';
+import { vi, test, beforeEach, afterEach } from 'vitest';
 
-// mock ReactDOM per non montare davvero l’app
+// Mock di @react-oauth/google per evitare errori di import
+vi.mock('@react-oauth/google', () => ({
+  GoogleOAuthProvider: ({ children }) => children,
+}));
+
+// Mock ReactDOM per non montare davvero l’app
 vi.mock('react-dom/client', () => {
   return {
     createRoot: () => ({ render: vi.fn() }),
