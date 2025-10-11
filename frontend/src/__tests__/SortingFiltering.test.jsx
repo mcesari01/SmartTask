@@ -22,7 +22,17 @@ beforeEach(() => {
 });
 
 test('renders Ordinamento section with sorting/filtering buttons', async () => {
-  axios.get.mockResolvedValueOnce({ data: [] });
+  // Mock all axios.get calls to return appropriate responses
+  axios.get.mockImplementation((url) => {
+    if (url.includes('/me')) {
+      return Promise.resolve({ data: {} });
+    }
+    if (url.includes('/tasks')) {
+      return Promise.resolve({ data: [] });
+    }
+    return Promise.resolve({ data: [] });
+  });
+  
   render(<App />);
 
   expect(await screen.findByText('Ordinamento')).toBeInTheDocument();
@@ -31,7 +41,17 @@ test('renders Ordinamento section with sorting/filtering buttons', async () => {
 });
 
 test('clicking active sort button toggles sort order and triggers backend call', async () => {
-  axios.get.mockResolvedValue({ data: [] });
+  // Mock all axios.get calls to return appropriate responses
+  axios.get.mockImplementation((url) => {
+    if (url.includes('/me')) {
+      return Promise.resolve({ data: {} });
+    }
+    if (url.includes('/tasks')) {
+      return Promise.resolve({ data: [] });
+    }
+    return Promise.resolve({ data: [] });
+  });
+  
   render(<App />);
   await screen.findByText('Ordinamento');
 
@@ -56,7 +76,17 @@ test('clicking active sort button toggles sort order and triggers backend call',
 });
 
 test('selecting different sort options calls backend with correct params', async () => {
-  axios.get.mockResolvedValue({ data: [] });
+  // Mock all axios.get calls to return appropriate responses
+  axios.get.mockImplementation((url) => {
+    if (url.includes('/me')) {
+      return Promise.resolve({ data: {} });
+    }
+    if (url.includes('/tasks')) {
+      return Promise.resolve({ data: [] });
+    }
+    return Promise.resolve({ data: [] });
+  });
+  
   render(<App />);
   await screen.findByText('Ordinamento');
 
@@ -81,7 +111,17 @@ test('selecting different sort options calls backend with correct params', async
 });
 
 test('toggling completion filter cycles through all/completed/active and calls backend', async () => {
-  axios.get.mockResolvedValue({ data: [] });
+  // Mock all axios.get calls to return appropriate responses
+  axios.get.mockImplementation((url) => {
+    if (url.includes('/me')) {
+      return Promise.resolve({ data: {} });
+    }
+    if (url.includes('/tasks')) {
+      return Promise.resolve({ data: [] });
+    }
+    return Promise.resolve({ data: [] });
+  });
+  
   render(<App />);
   await screen.findByText('Ordinamento');
 

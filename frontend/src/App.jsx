@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import ExportModal from './ExportModal';
-import { useGoogleLogin } from '@react-oauth/google';
 
 export default function App() {
   const [tasks, setTasks] = useState([]);
@@ -58,13 +57,30 @@ export default function App() {
     if (!original) return false;
     const origDate = original.deadline ? new Date(original.deadline).toISOString().slice(0, 10) : '';
     const origTime = original.deadline ? new Date(original.deadline).toISOString().slice(11, 16) : '';
+    const normalizedOrigTime = (origTime === '00:00' || origTime === '23:59') ? '' : origTime;
+    const normalizedInputTime = (deadlineTime === '00:00') ? '' : (deadlineTime || '');
     return (
       original.title !== title ||
       (original.description || '') !== (description || '') ||
       origDate !== deadlineDate ||
-      origTime !== (deadlineTime || '') ||
+      normalizedOrigTime !== normalizedInputTime ||
       original.priority !== priority
     );
+  };
+
+  const handleGoogleConnect = async () => {
+    const jwt = localStorage.getItem("token");
+    if (!jwt) return toast.error("Devi essere loggato...");
+
+    try {
+      const res = await axios.get('http://localhost:8000/auth/google-calendar/connect', {
+        headers: { Authorization: `Bearer ${jwt}` }
+      });
+      const oauthUrl = res.data.oauth_url + `&state=${encodeURIComponent(jwt)}`; // Append state if needed
+      window.location.href = oauthUrl;
+    } catch {
+      toast.error('Errore nel recuperare URL OAuth dal server');
+    }
   };
 
   useEffect(() => {
@@ -106,33 +122,54 @@ export default function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // --- Google OAuth (calendar connect) ---
-  const googleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      // tokenResponse.access_token è quello che serve per Calendar
-      const access_token = tokenResponse.access_token;
-      setGoogleAccessToken(access_token);
-      toast.success('Google Calendar connesso!');
+  // Recupera anche dal server se l'utente ha già salvato un access token (stato "connesso")
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      axios.get('http://localhost:8000/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => {
+        if (res.data.google_access_token) {
+          setGoogleAccessToken(res.data.google_access_token);
+        } else {
+          setGoogleAccessToken(null);
+        }
+      }).catch(() => setGoogleAccessToken(null));
+    } else {
+      setGoogleAccessToken(null);
+    }
+  }, []);
 
-      // salviamo il token sul backend così il server può usarlo per creare eventi
-      try {
+  // Sync existing tasks when Google is connected
+  useEffect(() => {
+    if (googleAccessToken) {
+      const syncExistingTasks = async () => {
         const token = localStorage.getItem('token');
-        await axios.post(
-          'http://localhost:8000/google-auth',
-          { access_token },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        // sincronizza i task esistenti (tentativo semplice: non gestisce dedup)
         for (const t of tasks) {
           if (!t.deadline) continue;
           try {
+            const dt = new Date(t.deadline);
+            const timeStr = dt.toISOString().slice(11, 16);  // es: '23:59' o '14:30'
+            const dateStr = dt.toISOString().slice(0, 10);  // 'YYYY-MM-DD'
+            const isAllDay = timeStr === '00:00' || timeStr === '23:59';  // Gestisci old default '23:59' come all-day
+
+            let start, end;
+            if (isAllDay) {
+              const nextDay = new Date(dt.getTime() + 86400000);
+              start = { date: dateStr };
+              end = { date: nextDay.toISOString().slice(0, 10) };
+            } else {
+              start = { dateTime: t.deadline, timeZone: 'Europe/Rome' };
+              end = { dateTime: new Date(dt.getTime() + 3600000).toISOString(), timeZone: 'Europe/Rome' };
+            }
+
             await axios.post(
               'http://localhost:8000/google-calendar/events',
               {
                 summary: t.title,
                 description: t.description || '',
-                start: { dateTime: new Date(t.deadline).toISOString(), timeZone: 'Europe/Rome' },
-                end: { dateTime: new Date(new Date(t.deadline).getTime() + 3600000).toISOString(), timeZone: 'Europe/Rome' },
+                start,
+                end,
               },
               { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -140,33 +177,11 @@ export default function App() {
             // ignora errori singoli
           }
         }
-      } catch (err) {
-        toast.error('Errore durante il salvataggio del token Google sul server.');
-      }
-    },
-    onError: () => {
-      toast.error('Errore durante l\'autenticazione Google');
-    },
-    scope: 'https://www.googleapis.com/auth/calendar',
-  });
-
-  // Recupera anche dal server se l'utente ha già salvato un access token (stato "connesso")
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setGoogleAccessToken(null);
-      return;
+        toast.success('Task esistenti sincronizzati con Google Calendar!');
+      };
+      syncExistingTasks();
     }
-    axios.get('http://localhost:8000/me', {
-      headers: { Authorization: `Bearer ${token}` }
-    }).then(res => {
-      if (res.data.google_access_token) {
-        setGoogleAccessToken(res.data.google_access_token);
-      } else {
-        setGoogleAccessToken(null);
-      }
-    }).catch(() => setGoogleAccessToken(null));
-  }, []);
+  }, [googleAccessToken]);
 
   const fetchTasks = async () => {
     try {
@@ -195,23 +210,32 @@ export default function App() {
     if (!title) return;
     try {
       const token = localStorage.getItem('token');
-      // Require a date to create a task. Time is optional and defaults to 23:59
       if (!deadlineDate) return;
-      const timePart = deadlineTime || '23:59';
+      const timePart = deadlineTime || '00:00';  
       const combined = new Date(`${deadlineDate}T${timePart}`);
       const body = { title, description, priority, deadline: combined.toISOString() };
       await axios.post('http://localhost:8000/tasks', body, { headers: { Authorization: `Bearer ${token}` } });
 
-      // se l'utente ha connesso Google Calendar, creiamo anche l'evento
       if (googleAccessToken) {
         try {
+          let start, end;
+          const isAllDay = !deadlineTime;  
+          if (isAllDay) {
+            const nextDay = new Date(combined.getTime() + 86400000);  
+            start = { date: deadlineDate };
+            end = { date: nextDay.toISOString().slice(0, 10) };
+          } else {
+            start = { dateTime: combined.toISOString(), timeZone: 'Europe/Rome' };
+            end = { dateTime: new Date(combined.getTime() + 3600000).toISOString(), timeZone: 'Europe/Rome' };
+          }
+
           await axios.post(
             'http://localhost:8000/google-calendar/events',
             {
               summary: title,
               description: description || '',
-              start: { dateTime: combined.toISOString(), timeZone: 'Europe/Rome' },
-              end: { dateTime: new Date(combined.getTime() + 3600000).toISOString(), timeZone: 'Europe/Rome' },
+              start,
+              end,
             },
             { headers: { Authorization: `Bearer ${token}` } }
           );
@@ -234,10 +258,44 @@ export default function App() {
     try {
       const token = localStorage.getItem('token');
       if (!deadlineDate) return; // date required
-      const timePart = deadlineTime || '23:59';
+      const timePart = deadlineTime || '00:00';  // Default a '00:00' per marcare all-day
       const combined = new Date(`${deadlineDate}T${timePart}`);
       const body = { title, description, priority, deadline: combined.toISOString() };
       await axios.put(`http://localhost:8000/tasks/${editingTaskId}`, body, { headers: { Authorization: `Bearer ${token}` } });
+
+      // se l'utente ha connesso Google Calendar, aggiorniamo anche l'evento (assumendo che non gestiamo update per ora; crea nuovo se non hai event ID)
+      if (googleAccessToken) {
+        try {
+          let start, end;
+          const isAllDay = !deadlineTime;  // Se non c'è orario, è all-day
+          if (isAllDay) {
+            // All-day: usa 'date' (end = giorno successivo)
+            const nextDay = new Date(combined.getTime() + 86400000);  // +1 giorno (86400000 ms)
+            start = { date: deadlineDate };
+            end = { date: nextDay.toISOString().slice(0, 10) };
+          } else {
+            // Timed: usa 'dateTime' con durata 1 ora
+            start = { dateTime: combined.toISOString(), timeZone: 'Europe/Rome' };
+            end = { dateTime: new Date(combined.getTime() + 3600000).toISOString(), timeZone: 'Europe/Rome' };
+          }
+
+          await axios.post(
+            'http://localhost:8000/google-calendar/events',
+            {
+              summary: title,
+              description: description || '',
+              start,
+              end,
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          toast.success('Evento aggiornato su Google Calendar!');
+        } catch {
+          // non bloccare l'update del task
+          toast.warn('Task aggiornato ma errore durante la sincronizzazione su Google Calendar.');
+        }
+      }
+
       resetForm();
       fetchTasks();
     } catch (err) {
@@ -287,7 +345,8 @@ export default function App() {
     if (task.deadline) {
       const dt = new Date(task.deadline);
       setDeadlineDate(dt.toISOString().slice(0, 10));
-      setDeadlineTime(dt.toISOString().slice(11, 16));
+      const time = dt.toISOString().slice(11, 16);
+      setDeadlineTime(time === '00:00' ? '' : time);
     } else {
       setDeadlineDate('');
       setDeadlineTime('');
@@ -328,7 +387,7 @@ export default function App() {
               Google Calendar collegato
             </div>
           ) : (
-            <button onClick={() => googleLogin()} className="btn btn-primary">Connetti Google Calendar</button>
+            <button onClick={handleGoogleConnect} className="btn btn-primary">Connetti Google Calendar</button>
           )}
 
           <button onClick={handleLogout} className="btn btn-danger"><svg width="12" height="12" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h7v2H5v14h7v2zm11-4l-1.375-1.45l2.55-2.55H9v-2h8.175l-2.55-2.55L16 7l5 5z"/></svg> Esci</button>
@@ -368,7 +427,7 @@ export default function App() {
           <input
             data-testid="deadline-input"
             type="datetime-local"
-            value={deadlineDate ? `${deadlineDate}T${deadlineTime || '23:59'}` : ''}
+            value={deadlineDate ? `${deadlineDate}T${deadlineTime || '00:00'}` : ''}
             onChange={(e) => {
               const v = e.target.value;
               if (!v) {

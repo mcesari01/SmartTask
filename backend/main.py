@@ -4,10 +4,12 @@ from typing import List, Optional
 import csv
 import io
 from datetime import datetime, timedelta
+from auth import refresh_access_token_with_refresh_token, save_google_tokens_for_user
+from jose import JWTError, jwt
 
-from fastapi import Depends, FastAPI, HTTPException, status, Body
+from fastapi import Depends, FastAPI, HTTPException, status, Body,Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import case, desc, text, inspect
 from sqlalchemy.orm import Session
@@ -25,7 +27,10 @@ from auth import (
     get_db,
     get_password_hash,
     verify_password,
-    verify_google_id_token_and_get_email,
+    verify_google_id_token_and_get_email, 
+    refresh_access_token_with_refresh_token, 
+    save_google_tokens_for_user,
+    exchange_code_for_tokens
 )
 from database.database import Base, engine
 from models import Task as TaskModel, User
@@ -153,6 +158,75 @@ def get_me(current_user: User = Depends(get_current_user)):
         "google_connected": bool(current_user.google_access_token),
     }
 
+@app.get("/auth/google-calendar/connect")
+def google_calendar_connect():
+    """Generate Google OAuth URL for calendar connection."""
+    from urllib.parse import urlencode
+    import os
+
+    client_id = os.getenv("GOOGLE_CLIENT_ID", "39094537919-fpqfsor5dc2mrgbacotk4tlt1mc8j19u.apps.googleusercontent.com")
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google-calendar/callback")
+
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": "https://www.googleapis.com/auth/calendar.events",
+        "response_type": "code",
+        "access_type": "offline",
+        "prompt": "consent"
+    }
+
+    oauth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
+    print("🌐 Generated Google OAuth URL:", oauth_url)
+
+    return {
+        "oauth_url": oauth_url,
+        "client_id": client_id,
+        "redirect_uri": redirect_uri
+    }
+
+@app.get("/auth/google-calendar/callback")
+def google_calendar_callback(
+    code: str,
+    state: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Callback OAuth che scambia il codice con i token e li salva per l'utente loggato."""
+    from auth import exchange_code_for_tokens, save_google_tokens_for_user, SECRET_KEY, ALGORITHM
+    from models import User
+
+    # Decodifica il JWT passato come state per capire chi è l'utente
+    if not state:
+        raise HTTPException(status_code=400, detail="Missing state (user token)")
+
+    try:
+        from urllib.parse import unquote
+        payload = jwt.decode(unquote(state), SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid state payload")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid JWT in state: {str(e)}")
+
+    # Recupera l'utente dal database
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Scambia il code con i token
+    token_data = exchange_code_for_tokens(code)
+
+    access_token = token_data.get("access_token")
+    refresh_token = token_data.get("refresh_token")
+    expires_in = token_data.get("expires_in")
+
+    if not access_token:
+        raise HTTPException(status_code=400, detail="No access_token returned from Google")
+
+    save_google_tokens_for_user(db, user, access_token, refresh_token, expires_in)
+
+    return RedirectResponse(url="http://localhost:5173/") 
+
 
 @app.post("/google-auth")
 def save_google_token(
@@ -184,68 +258,148 @@ def save_google_token(
     return {"detail": "google token saved"}
 
 
+@app.get("/google-auth/status")
+def get_google_auth_status(current_user: User = Depends(get_current_user)):
+    """Get the current Google authentication status for the user."""
+    from auth import is_valid_refresh_token
+    from datetime import datetime
+    
+    status = {
+        "google_connected": bool(current_user.google_access_token),
+        "has_refresh_token": bool(current_user.google_refresh_token),
+        "refresh_token_valid_format": False,
+        "token_expiry": current_user.google_token_expiry.isoformat() if current_user.google_token_expiry else None,
+        "token_expired": False,
+        "recommendations": []
+    }
+    
+    if current_user.google_refresh_token:
+        status["refresh_token_valid_format"] = is_valid_refresh_token(current_user.google_refresh_token)
+        
+        if not status["refresh_token_valid_format"]:
+            status["recommendations"].append("Refresh token appears to be invalid or a placeholder. Please reconnect your Google account.")
+    
+    if current_user.google_token_expiry:
+        status["token_expired"] = current_user.google_token_expiry < datetime.utcnow()
+        if status["token_expired"]:
+            status["recommendations"].append("Access token has expired. A refresh will be attempted automatically on next API call.")
+    
+    if not current_user.google_access_token:
+        status["recommendations"].append("No Google access token found. Please connect your Google account through the OAuth flow.")
+    
+    return status
+
+
+@app.post("/google-auth/refresh")
+def manually_refresh_google_token(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manually refresh the Google access token using the stored refresh token."""
+    if not current_user.google_refresh_token:
+        raise HTTPException(status_code=400, detail="No refresh token available. Please reconnect your Google account.")
+    
+    try:
+        refreshed = refresh_access_token_with_refresh_token(current_user.google_refresh_token)
+        new_access = refreshed.get("access_token")
+        expires_in = refreshed.get("expires_in", 3600)
+        
+        save_google_tokens_for_user(db, current_user, new_access, expires_in=expires_in)
+        
+        return {
+            "detail": "Token refreshed successfully",
+            "expires_in": expires_in,
+            "new_expiry": current_user.google_token_expiry.isoformat() if current_user.google_token_expiry else None
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error during token refresh: {str(e)}")
+
+
 @app.post("/google-calendar/events")
 def create_google_event(
     event: CalendarEventCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Creates an event on the user's primary Google Calendar.
-    Uses the saved google_access_token for the current user; as fallback the request may include access_token.
-    Expected event body: { summary, description, start: { dateTime, timeZone }, end: { dateTime, timeZone } }
-    """
-    token_to_use = current_user.google_access_token or event.access_token
+    """Crea o aggiorna un evento nel calendario Google dell'utente."""
+    token_to_use = current_user.google_access_token
     if not token_to_use:
-        raise HTTPException(status_code=400, detail="No Google access token available. Connect Google Calendar first.")
+        raise HTTPException(status_code=400, detail="Google account non collegato")
 
-    # Ensure start/end are plain dicts (Pydantic models -> dict)
-    def to_plain(o):
-        # if it's a pydantic v2 model, use model_dump(); if it's already a dict, return as-is
-        try:
-            model_dump = getattr(o, "model_dump", None)
-            if callable(model_dump):
-                return model_dump()
-        except Exception:
-            pass
-        # fallback: if it behaves like dict, return it
-        if isinstance(o, dict):
-            return o
-        # final fallback: build dict from attributes
-        return {"dateTime": getattr(o, "dateTime", None), "timeZone": getattr(o, "timeZone", None)}
-
-    start_obj = to_plain(event.start)
-    end_obj = to_plain(event.end)
-
-    url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
     headers = {"Authorization": f"Bearer {token_to_use}", "Content-Type": "application/json"}
+
+    # Normalizza start/end: se sono dict, usali direttamente; se sono Pydantic, estrai con .model_dump()
+    def to_dict_safe(value):
+        if hasattr(value, "model_dump"):
+            return value.model_dump()
+        elif isinstance(value, dict):
+            return value
+        else:
+            raise HTTPException(status_code=400, detail="Invalid event date/time format")
+
+    start_data = to_dict_safe(event.start)
+    end_data = to_dict_safe(event.end)
+
     body = {
         "summary": event.summary,
         "description": event.description or "",
-        "start": start_obj,
-        "end": end_obj,
+        "start": start_data,
+        "end": end_data,
     }
 
-    resp = requests.post(url, json=body, headers=headers)
-    if resp.status_code == 401:
-        # token invalid/expired
-        raise HTTPException(status_code=401, detail="Google token invalid or expired")
+
+    task = None
+    event_id = None
+    if event.task_id:
+        task = db.query(TaskModel).filter(
+            TaskModel.id == event.task_id, TaskModel.user_id == current_user.id
+        ).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found or not authorized")
+        event_id = task.google_event_id
+
+    if event_id:
+        # Update existing event (PATCH for partial update)
+        url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}"
+        resp = requests.patch(url, json=body, headers=headers)
+    else:
+        # Create new event (POST)
+        url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+        resp = requests.post(url, json=body, headers=headers)
+
+    if resp.status_code == 401 and current_user.google_refresh_token:
+        try:
+            refreshed = refresh_access_token_with_refresh_token(current_user.google_refresh_token)
+            new_access = refreshed.get("access_token")
+            expires_in = refreshed.get("expires_in", 3600)
+            save_google_tokens_for_user(db, current_user, new_access, expires_in=expires_in)
+
+            # Retry with new token
+            headers["Authorization"] = f"Bearer {new_access}"
+            if event_id:
+                resp = requests.patch(url, json=body, headers=headers)
+            else:
+                resp = requests.post(url, json=body, headers=headers)
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            raise HTTPException(status_code=401, detail=f"Google token refresh failed: {str(e)}")
+
     if not resp.ok:
         raise HTTPException(status_code=resp.status_code, detail=f"Google Calendar API error: {resp.text}")
 
-    created = resp.json()
-    # Optionally link the created event to the task if client provided task_id
-    if event.task_id:
-        try:
-            task = db.query(TaskModel).filter(TaskModel.id == event.task_id, TaskModel.user_id == current_user.id).first()
-            if task:
-                task.google_event_id = created.get("id")
-                db.add(task)
-                db.commit()
-        except Exception:
-            pass
+    event_data = resp.json()
+    new_event_id = event_data.get('id')
 
-    return created
+    # If creating new and task provided, save the event ID to the task
+    if task and not event_id and new_event_id:
+        task.google_event_id = new_event_id
+        db.commit()
+        db.refresh(task)
+
+    return event_data
 
 
 

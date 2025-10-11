@@ -72,11 +72,11 @@ class CalendarEventDateTime(BaseModel):
     timeZone: Optional[str] = "Europe/Rome"
 
 
+
 class CalendarEventCreate(BaseModel):
     summary: str
     description: Optional[str] = None
-    start: CalendarEventDateTime
-    end: CalendarEventDateTime
+    start: Dict[str, Any]
+    end: Dict[str, Any]
     task_id: Optional[int] = None
-    # optional: allow passing access_token in body (fallback)
     access_token: Optional[str] = None
