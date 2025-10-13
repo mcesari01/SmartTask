@@ -1,6 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, fireEvent, screen } from '@testing-library/react'
 import App from '../App'
-import axios from 'axios'
 import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('axios')

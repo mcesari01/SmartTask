@@ -8,7 +8,7 @@ import ExportModal from "../ExportModal";
 vi.mock("axios");
 
 // Mock di alert
-global.alert = vi.fn();
+globalThis.alert = vi.fn();
 
 describe("exportFile standalone function", () => {
   async function exportFile(exportType, onClose) {
@@ -39,13 +39,13 @@ describe("exportFile standalone function", () => {
     vi.resetAllMocks();
     onClose = vi.fn();
     mockBlob = vi.fn();
-    global.Blob = mockBlob;
+    globalThis.Blob = mockBlob;
 
     mockURL = {
       createObjectURL: vi.fn().mockReturnValue("blob:http://mocked-url"),
       revokeObjectURL: vi.fn(),
     };
-    global.URL = mockURL;
+    globalThis.URL = mockURL;
   });
 
   it("chiama axios e genera link con exportType csv", async () => {
@@ -85,8 +85,8 @@ describe("ExportModal component", () => {
     vi.resetAllMocks();
     onClose = vi.fn();
     axios.get.mockResolvedValue({ data: "fake-binary" });
-    global.URL.createObjectURL = vi.fn(() => "blob:mock-url");
-    global.URL.revokeObjectURL = vi.fn();
+  globalThis.URL.createObjectURL = vi.fn(() => "blob:mock-url");
+  globalThis.URL.revokeObjectURL = vi.fn();
   });
 
   it("non renderizza nulla se isOpen=false", () => {
@@ -141,7 +141,7 @@ describe("ExportModal component", () => {
     fireEvent.click(screen.getByText("📥 Scarica"));
 
     await waitFor(() => {
-      expect(global.alert).toHaveBeenCalledWith(
+      expect(globalThis.alert).toHaveBeenCalledWith(
         "Errore durante l'esportazione. Riprova."
       );
     });
