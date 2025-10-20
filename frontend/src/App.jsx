@@ -24,6 +24,7 @@ export default function App() {
   const [googleAccessToken, setGoogleAccessToken] = useState(null); // <-- stato Google Calendar connection
   const navigate = useNavigate();
   const sortMenuRef = useRef(null);
+  const lastSyncedToken = useRef(null);
 
   // close sort menu on outside click or escape
   useEffect(() => {
@@ -142,46 +143,52 @@ export default function App() {
 
   // Sync existing tasks when Google is connected
   useEffect(() => {
-    if (googleAccessToken) {
-      const syncExistingTasks = async () => {
-        const token = localStorage.getItem('token');
-        for (const t of tasks) {
-          if (!t.deadline) continue;
-          try {
-            const dt = new Date(t.deadline);
-            const timeStr = dt.toISOString().slice(11, 16);  // es: '23:59' o '14:30'
-            const dateStr = dt.toISOString().slice(0, 10);  // 'YYYY-MM-DD'
-            const isAllDay = timeStr === '00:00' || timeStr === '23:59';  // Gestisci old default '23:59' come all-day
+    // Only trigger sync when a new googleAccessToken arrives. Use a ref to avoid
+    // re-syncing when tasks change (e.g. due to sorting) which could create duplicates.
+    if (!googleAccessToken) return;
+    if (lastSyncedToken.current === googleAccessToken) return;
 
-            let start, end;
-            if (isAllDay) {
-              const nextDay = new Date(dt.getTime() + 86400000);
-              start = { date: dateStr };
-              end = { date: nextDay.toISOString().slice(0, 10) };
-            } else {
-              start = { dateTime: t.deadline, timeZone: 'Europe/Rome' };
-              end = { dateTime: new Date(dt.getTime() + 3600000).toISOString(), timeZone: 'Europe/Rome' };
-            }
+    lastSyncedToken.current = googleAccessToken;
 
-            await axios.post(
-              'http://localhost:8000/google-calendar/events',
-              {
-                summary: t.title,
-                description: t.description || '',
-                start,
-                end,
-              },
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-          } catch {
-            // ignora errori singoli
+    const syncExistingTasks = async () => {
+      const token = localStorage.getItem('token');
+      for (const t of tasks) {
+        if (!t.deadline) continue;
+        try {
+          const dt = new Date(t.deadline);
+          const timeStr = dt.toISOString().slice(11, 16);  // es: '23:59' o '14:30'
+          const dateStr = dt.toISOString().slice(0, 10);  // 'YYYY-MM-DD'
+          const isAllDay = timeStr === '00:00' || timeStr === '23:59';  // Gestisci old default '23:59' come all-day
+
+          let start, end;
+          if (isAllDay) {
+            const nextDay = new Date(dt.getTime() + 86400000);
+            start = { date: dateStr };
+            end = { date: nextDay.toISOString().slice(0, 10) };
+          } else {
+            start = { dateTime: t.deadline, timeZone: 'Europe/Rome' };
+            end = { dateTime: new Date(dt.getTime() + 3600000).toISOString(), timeZone: 'Europe/Rome' };
           }
+
+          await axios.post(
+            'http://localhost:8000/google-calendar/events',
+            {
+              summary: t.title,
+              description: t.description || '',
+              start,
+              end,
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        } catch {
+          // ignora errori singoli
         }
-        toast.success('Task esistenti sincronizzati con Google Calendar!');
-      };
-      syncExistingTasks();
-    }
-  }, [googleAccessToken]);
+      }
+      toast.success('Task esistenti sincronizzati con Google Calendar!');
+    };
+
+    syncExistingTasks();
+  }, [googleAccessToken, tasks]);
 
   const fetchTasks = async () => {
     try {
