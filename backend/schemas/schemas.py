@@ -38,6 +38,7 @@ class TaskBase(BaseModel):
     deadline: Optional[datetime] = None
     priority: Optional[str] = "Medium"
     completed: Optional[bool] = False
+    all_day: Optional[bool] = False
 
 
 class TaskCreate(TaskBase):
@@ -68,7 +69,9 @@ class GoogleSaveToken(BaseModel):
 
 
 class CalendarEventDateTime(BaseModel):
-    dateTime: str
+    # For timed events Google uses `dateTime`, for all-day events it uses `date` (YYYY-MM-DD)
+    dateTime: Optional[str] = None
+    date: Optional[str] = None
     timeZone: Optional[str] = "Europe/Rome"
 
 

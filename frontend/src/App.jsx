@@ -173,7 +173,7 @@ export default function App() {
               },
               { headers: { Authorization: `Bearer ${token}` } }
             );
-          } catch (e) {
+          } catch {
             // ignora errori singoli
           }
         }
@@ -211,9 +211,10 @@ export default function App() {
     try {
       const token = localStorage.getItem('token');
       if (!deadlineDate) return;
-      const timePart = deadlineTime || '00:00';  
-      const combined = new Date(`${deadlineDate}T${timePart}`);
-      const body = { title, description, priority, deadline: combined.toISOString() };
+  const timePart = deadlineTime || '00:00';  
+  const combined = new Date(`${deadlineDate}T${timePart}`);
+  const isAllDay = !deadlineTime;
+  const body = { title, description, priority, deadline: combined.toISOString(), all_day: isAllDay };
       await axios.post('http://localhost:8000/tasks', body, { headers: { Authorization: `Bearer ${token}` } });
 
       if (googleAccessToken) {
@@ -258,9 +259,10 @@ export default function App() {
     try {
       const token = localStorage.getItem('token');
       if (!deadlineDate) return; // date required
-      const timePart = deadlineTime || '00:00';  // Default a '00:00' per marcare all-day
-      const combined = new Date(`${deadlineDate}T${timePart}`);
-      const body = { title, description, priority, deadline: combined.toISOString() };
+  const timePart = deadlineTime || '00:00';  // Default a '00:00' per marcare all-day
+  const combined = new Date(`${deadlineDate}T${timePart}`);
+  const isAllDay = !deadlineTime;
+  const body = { title, description, priority, deadline: combined.toISOString(), all_day: isAllDay };
       await axios.put(`http://localhost:8000/tasks/${editingTaskId}`, body, { headers: { Authorization: `Bearer ${token}` } });
 
       // se l'utente ha connesso Google Calendar, aggiorniamo anche l'evento (assumendo che non gestiamo update per ora; crea nuovo se non hai event ID)
@@ -346,7 +348,7 @@ export default function App() {
       const dt = new Date(task.deadline);
       setDeadlineDate(dt.toISOString().slice(0, 10));
       const time = dt.toISOString().slice(11, 16);
-      setDeadlineTime(time === '00:00' ? '' : time);
+      setDeadlineTime(task.all_day ? '' : (time === '00:00' ? '' : time));
     } else {
       setDeadlineDate('');
       setDeadlineTime('');
@@ -595,7 +597,20 @@ export default function App() {
                         {isUrgent(task.deadline) && <span className="badge" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}>In scadenza</span>}
                       </div>
                       {task.description && <div className="task-meta" style={{ marginTop: 6 }}>{task.description}</div>}
-                      <div className="task-meta" style={{ marginTop: 4 }}>Scadenza: {new Date(task.deadline).toLocaleString()}</div>
+                      <div className="task-meta" style={{ marginTop: 4 }}>Scadenza: {
+                        (() => {
+                          if (!task.deadline) return '';
+                          try {
+                            const dt = new Date(task.deadline);
+                            // Prefer explicit flag if available
+                            const isAllDay = task.all_day === true || (dt.toISOString().slice(11,16) === '00:00' || dt.toISOString().slice(11,16) === '23:59');
+                            if (isAllDay) return dt.toLocaleDateString();
+                            return dt.toLocaleString();
+                          } catch {
+                            return new Date(task.deadline).toLocaleString();
+                          }
+                        })()
+                      }</div>
                     </div>
                     <div className="actions">
                       <button onClick={() => toggleCompleted(task)} className="btn btn-success">{task.completed ? '✓ Completato' : 'Segna come completato'}</button>

@@ -73,6 +73,10 @@ try:
             if "google_event_id" not in task_columns:
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN google_event_id TEXT"))
                 conn.commit()
+            if "all_day" not in task_columns:
+                # default 0 (False)
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN all_day BOOLEAN DEFAULT 0"))
+                conn.commit()
     except Exception:
         pass
 
@@ -396,6 +400,15 @@ def create_google_event(
     # If creating new and task provided, save the event ID to the task
     if task and not event_id and new_event_id:
         task.google_event_id = new_event_id
+        # If the event was an all-day event (start contains 'date') mark task as all_day
+        try:
+            if isinstance(start_data, dict) and start_data.get('date'):
+                task.all_day = True
+                # set deadline to that date at 00:00:00 (local naive datetime)
+                from datetime import datetime
+                task.deadline = datetime.fromisoformat(start_data.get('date'))
+        except Exception:
+            pass
         db.commit()
         db.refresh(task)
 
@@ -451,7 +464,11 @@ def create_task(
     current_user: User = Depends(get_current_user),
 ):
     """Creates a new task for the current user."""
-    db_task = TaskModel(**task.model_dump(), user_id=current_user.id)
+    payload = task.model_dump()
+    # ensure all_day default
+    if 'all_day' not in payload or payload.get('all_day') is None:
+        payload['all_day'] = False
+    db_task = TaskModel(**payload, user_id=current_user.id)
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
@@ -487,6 +504,9 @@ def update_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found or not authorized")
     for key, value in updated_task.model_dump().items():
+        # preserve existing values if None provided
+        if value is None:
+            continue
         setattr(task, key, value)
     db.commit()
     db.refresh(task)

@@ -55,6 +55,8 @@ class Task(Base):  # pylint: disable=too-few-public-methods
     deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     priority: Mapped[str] = mapped_column(String, default="Medium", nullable=False)
     completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Indicates if the task represents an all-day event (no specific time)
+    all_day: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Optional Google Calendar event id to avoid duplicates
     google_event_id: Mapped[str | None] = mapped_column(String, nullable=True)
