@@ -34,7 +34,9 @@ export default function TaskMap({ tasks = [], style = { height: 400 }, onClose }
         // clear existing layers except tile layer
         mapRef.current.eachLayer((layer) => {
           if (layer && layer.options && layer.options.attribution) return; // keep tile layer
-          try { mapRef.current.removeLayer(layer); } catch (e) {}
+          try { mapRef.current.removeLayer(layer); } catch {
+            /* ignore layer remove errors */
+          }
         });
 
         const markers = [];
@@ -51,8 +53,8 @@ export default function TaskMap({ tasks = [], style = { height: 400 }, onClose }
           const group = window.L.featureGroup(markers);
           mapRef.current.fitBounds(group.getBounds().pad(0.2));
         }
-      } catch (e) {
-        // ignore
+      } catch {
+        // ignore initialization errors
       }
     };
 
@@ -73,7 +75,9 @@ export default function TaskMap({ tasks = [], style = { height: 400 }, onClose }
           mapRef.current.remove();
           mapRef.current = null;
         }
-      } catch (e) {}
+      } catch {
+        /* ignore cleanup errors */
+      }
       if (script && script.parentNode) script.parentNode.removeChild(script);
     };
   }, [tasks]);

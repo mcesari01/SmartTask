@@ -409,16 +409,11 @@ def create_google_event(
 
     # If creating new and task provided, save the event ID to the task
     if task and not event_id and new_event_id:
+        # Save the Google event id to the task but DO NOT modify the task's
+        # `all_day` or `deadline` fields. The frontend decides how tasks are
+        # stored locally; Google events may be all-day (use `start.date`) but
+        # we intentionally avoid mutating the SmartTask model here.
         task.google_event_id = new_event_id
-        # If the event was an all-day event (start contains 'date') mark task as all_day
-        try:
-            if isinstance(start_data, dict) and start_data.get('date'):
-                task.all_day = True
-                # set deadline to that date at 00:00:00 (local naive datetime)
-                from datetime import datetime
-                task.deadline = datetime.fromisoformat(start_data.get('date'))
-        except Exception:
-            pass
         db.commit()
         db.refresh(task)
 

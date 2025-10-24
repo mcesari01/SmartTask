@@ -39,7 +39,9 @@ export default function TaskLocationInput({ value, onSelect, placeholder = 'Indi
       clearTimeout(timeout);
       try {
         controller.abort();
-      } catch (e) {}
+      } catch {
+        /* ignore abort errors */
+      }
     };
   }, [query]);
 
