@@ -607,7 +607,7 @@ export default function App() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="section-title">Task</div>
             <div>
-              <button className="btn btn-ghost" onClick={() => setShowMap((s) => !s)}>{showMap ? 'Mostra lista' : 'Apri mappa'}</button>
+              <button className="btn btn-ghost" onClick={() => setShowMap((s) => !s)}>{showMap ? 'Mostra lista' : 'Mostra mappa'}</button>
             </div>
           </div>
 

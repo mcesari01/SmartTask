@@ -86,11 +86,6 @@ export default function TaskMap({ tasks = [], style = { height: 400 }, onClose }
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <div style={{ fontWeight: 600 }}>Mappa task</div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {onClose && (
-            <button className="btn btn-ghost" onClick={onClose}>Chiudi mappa</button>
-          )}
-        </div>
       </div>
       <div ref={containerRef} style={{ width: '100%', height: style.height, borderRadius: 8, overflow: 'hidden' }} />
     </div>
