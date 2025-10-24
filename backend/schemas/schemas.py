@@ -39,6 +39,10 @@ class TaskBase(BaseModel):
     priority: Optional[str] = "Medium"
     completed: Optional[bool] = False
     all_day: Optional[bool] = False
+    # Optional location fields
+    address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class TaskCreate(TaskBase):
@@ -51,6 +55,7 @@ class TaskRead(TaskBase):
     id: int
     user_id: int
     google_event_id: Optional[str] = None
+    # model_config from attributes so SQLAlchemy model -> pydantic works
 
     model_config = ConfigDict(from_attributes=True)
 

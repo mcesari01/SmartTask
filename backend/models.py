@@ -2,7 +2,7 @@
 
 This module defines SQLAlchemy models for users and tasks.
 """
-from sqlalchemy import Integer, String, DateTime, ForeignKey, Boolean, Text
+from sqlalchemy import Integer, String, DateTime, ForeignKey, Boolean, Text, Float
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime
 from database.database import Base
@@ -60,6 +60,10 @@ class Task(Base):  # pylint: disable=too-few-public-methods
 
     # Optional Google Calendar event id to avoid duplicates
     google_event_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Optional location fields
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     user: Mapped["User"] = relationship("User", back_populates="tasks")

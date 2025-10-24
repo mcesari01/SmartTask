@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import ExportModal from './ExportModal';
+import TaskLocationInput from './components/TaskLocationInput';
+import TaskMap from './components/TaskMap';
 
 export default function App() {
   const [tasks, setTasks] = useState([]);
@@ -14,6 +16,9 @@ export default function App() {
   const [deadlineDate, setDeadlineDate] = useState(''); // YYYY-MM-DD
   const [deadlineTime, setDeadlineTime] = useState(''); // HH:MM (optional)
   const [priority, setPriority] = useState('Medium');
+  const [address, setAddress] = useState('');
+  const [latitude, setLatitude] = useState(null);
+  const [longitude, setLongitude] = useState(null);
   const [sortBy, setSortBy] = useState('insertion'); // insertion | deadline | priority
   const [sortOrder, setSortOrder] = useState('asc'); // asc | desc
   const [completedFilter, setCompletedFilter] = useState('all'); // all | completed | active
@@ -21,6 +26,7 @@ export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [showExportModal, setShowExportModal] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const [googleAccessToken, setGoogleAccessToken] = useState(null); // <-- stato Google Calendar connection
   const navigate = useNavigate();
   const sortMenuRef = useRef(null);
@@ -50,6 +56,9 @@ export default function App() {
     setDeadlineDate('');
     setDeadlineTime('');
     setPriority('Medium');
+    setAddress('');
+    setLatitude(null);
+    setLongitude(null);
   };
 
   const hasChanges = () => {
@@ -222,7 +231,9 @@ export default function App() {
   const combined = new Date(`${deadlineDate}T${timePart}`);
   const isAllDay = !deadlineTime;
   const body = { title, description, priority, deadline: combined.toISOString(), all_day: isAllDay };
-      await axios.post('http://localhost:8000/tasks', body, { headers: { Authorization: `Bearer ${token}` } });
+    // include optional location
+  const bodyWithLocation = { ...body, address: address || null, latitude: latitude ?? null, longitude: longitude ?? null };
+    await axios.post('http://localhost:8000/tasks', bodyWithLocation, { headers: { Authorization: `Bearer ${token}` } });
 
       if (googleAccessToken) {
         try {
@@ -270,7 +281,8 @@ export default function App() {
   const combined = new Date(`${deadlineDate}T${timePart}`);
   const isAllDay = !deadlineTime;
   const body = { title, description, priority, deadline: combined.toISOString(), all_day: isAllDay };
-      await axios.put(`http://localhost:8000/tasks/${editingTaskId}`, body, { headers: { Authorization: `Bearer ${token}` } });
+    const bodyWithLocation = { ...body, address: address || null, latitude: latitude ?? null, longitude: longitude ?? null };
+    await axios.put(`http://localhost:8000/tasks/${editingTaskId}`, bodyWithLocation, { headers: { Authorization: `Bearer ${token}` } });
 
       // se l'utente ha connesso Google Calendar, aggiorniamo anche l'evento (assumendo che non gestiamo update per ora; crea nuovo se non hai event ID)
       if (googleAccessToken) {
@@ -361,6 +373,9 @@ export default function App() {
       setDeadlineTime('');
     }
     setPriority(task.priority);
+    setAddress(task.address || '');
+    setLatitude(task.latitude ?? null);
+    setLongitude(task.longitude ?? null);
   };
 
   const toggleCompleted = async (task) => {
@@ -478,6 +493,17 @@ export default function App() {
               <option value="Low">Bassa</option>
             </select>
           </div>
+          <div className="field" style={{ marginTop: 12 }}>
+            <label>Luogo (opzionale)</label>
+            <TaskLocationInput
+              value={address}
+              onSelect={(data) => {
+                setAddress(data?.address || '');
+                setLatitude(data?.latitude ?? null);
+                setLongitude(data?.longitude ?? null);
+              }}
+            />
+          </div>
           <div className="form-actions" style={{ marginTop: 16 }}>
             <button
               onClick={editingTaskId ? updateTask : createTask}
@@ -578,8 +604,19 @@ export default function App() {
             </div>
           </div>
 
-          <div className="section-title">Task</div>
-            {tasks.length === 0 ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="section-title">Task</div>
+            <div>
+              <button className="btn btn-ghost" onClick={() => setShowMap((s) => !s)}>{showMap ? 'Mostra lista' : 'Apri mappa'}</button>
+            </div>
+          </div>
+
+          {showMap ? (
+            <div style={{ marginTop: 12 }}>
+              <TaskMap tasks={tasks.filter((t) => t.latitude && t.longitude)} style={{ height: '60vh' }} onClose={() => setShowMap(false)} />
+            </div>
+          ) : (
+            (tasks.length === 0) ? (
               <div className="card no-tasks-message" style={{
                 padding: '32px',
                 textAlign: 'center',
@@ -618,6 +655,7 @@ export default function App() {
                           }
                         })()
                       }</div>
+                      {task.address && <div className="task-meta" style={{ marginTop: 6 }}>Luogo: {task.address}</div>}
                     </div>
                     <div className="actions">
                       <button onClick={() => toggleCompleted(task)} className="btn btn-success">{task.completed ? '✓ Completato' : 'Segna come completato'}</button>
@@ -627,7 +665,8 @@ export default function App() {
                   </li>
                 ))}
               </ul>
-            )}
+            )
+          )}
         </section>
       </div>
       <ToastContainer />

@@ -77,6 +77,16 @@ try:
                 # default 0 (False)
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN all_day BOOLEAN DEFAULT 0"))
                 conn.commit()
+            # Add location columns if missing
+            if "address" not in task_columns:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN address TEXT"))
+                conn.commit()
+            if "latitude" not in task_columns:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN latitude FLOAT"))
+                conn.commit()
+            if "longitude" not in task_columns:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN longitude FLOAT"))
+                conn.commit()
     except Exception:
         pass
 
