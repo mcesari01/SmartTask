@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 // Lightweight Leaflet loader + map component using CDN (no npm install required)
-export default function TaskMap({ tasks = [], style = { height: 400 }, onClose }) {
+export default function TaskMap({ tasks = [], style = { height: 400 } }) {
   const mapRef = useRef(null);
   const containerRef = useRef(null);
 
